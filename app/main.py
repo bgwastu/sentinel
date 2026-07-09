@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Query
@@ -58,6 +59,8 @@ async def lifespan(app: FastAPI):
     get_cpu_percent()
     metric_history.load()
     storage.ensure_storage_scan(force=False)
+    threading.Thread(target=docker_collector.collect_docker, daemon=True).start()
+    threading.Thread(target=network.get_public_ip, daemon=True).start()
     task = asyncio.create_task(_sparkline_loop())
     yield
     task.cancel()
