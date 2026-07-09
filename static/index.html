@@ -78,7 +78,7 @@
                     SYSTEM & PROCESSES
                 </button>
                 <button onclick="switchTab('docker')" id="tabBtn-docker" class="tab-btn px-4 py-2.5 font-mono text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all duration-150 focus:outline-none flex items-center gap-2">
-                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M4 10h2v2H4v-2zm3 0h2v2H7v-2zm3 0h2v2h-2v-2zm3 0h2v2h-2v-2zm-6-3h2v2H7V7zm3 0h2v2h-2V7zm8 4.5c-.4 1.2-1.4 2.2-2.6 2.6C14.2 14.8 12.1 15 10 15c-2.1 0-4.2-.2-6.4-.9C2.4 13.7 1.4 12.7 1 11.5 2.8 11.2 4.6 11 6.5 11H10c.3 0 .6 0 .9.1 1.5.2 2.9.7 4.1 1.4z"/></svg>
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.185.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.185.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.185.186.186m5.893 2.715h2.118a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m-2.93 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.185V9.006a.185.185 0 00-.184-.186h-2.12a.186.186 0 00-.186.186v1.887c0 .102.084.185.186.185m-2.92 0h2.12a.185.185 0 00.184-.185V9.006a.185.185 0 00-.184-.186h-2.12a.185.185 0 00-.184.185v1.888c0 .102.082.185.185.185M23.763 9.89c-.065-.051-.672-.51-1.954-.51-.338.001-.676.03-1.01.087-.248-1.7-1.653-2.53-1.716-2.566l-.344-.199-.226.327c-.284.438-.49.922-.612 1.43-.23.97-.09 1.882.403 2.661-.595.332-1.55.413-1.744.42H.751a.751.751 0 00-.75.748 11.376 11.376 0 00.692 4.062c.545 1.428 1.355 2.48 2.41 3.124 1.18.723 3.1 1.137 5.275 1.137.983.003 1.963-.086 2.93-.266a12.248 12.248 0 003.823-1.389c.98-.567 1.86-1.288 2.61-2.136 1.252-1.418 1.998-2.997 2.553-4.4h.221c1.372 0 2.215-.549 2.68-1.009.309-.293.55-.65.707-1.046l.098-.288Z"/></svg>
                     DOCKER
                 </button>
                 <button onclick="switchTab('cron')" id="tabBtn-cron" class="tab-btn px-4 py-2.5 font-mono text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all duration-150 focus:outline-none flex items-center gap-2">
@@ -479,21 +479,28 @@
                 const hasChildren = (p.children || []).length > 0;
                 const expanded = expandedPids.has(p.pid);
                 const indent = depth * 16;
-                const toggleBtn = hasChildren
-                    ? `<button type="button" onclick="toggleProcessNode(${p.pid})" class="text-slate-500 hover:text-emerald-400 w-4 text-center">${expanded ? '▾' : '▸'}</button>`
-                    : '<span class="w-4 inline-block"></span>';
+                const chevron = hasChildren
+                    ? `<svg class="w-3 h-3 shrink-0 transition-transform duration-150 ${expanded ? 'rotate-90' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>`
+                    : '<span class="w-3 h-3 shrink-0"></span>';
+                const nameCell = hasChildren
+                    ? `<button type="button" onclick="toggleProcessNode(${p.pid})" class="flex items-center gap-1.5 min-w-0 text-left text-slate-200 hover:text-emerald-400 transition group">
+                            ${chevron}
+                            <span class="truncate" title="${p.label || p.name}">${p.name}</span>
+                       </button>`
+                    : `<div class="flex items-center gap-1.5 min-w-0">
+                            ${chevron}
+                            <span class="truncate text-slate-200" title="${p.label || p.name}">${p.name}</span>
+                       </div>`;
                 const systemBadge = p.is_system
-                    ? '<span class="ml-1 text-[9px] text-slate-600 border border-slate-800 px-1 rounded">sys</span>'
+                    ? '<span class="ml-1 shrink-0 text-[9px] text-slate-600 border border-slate-800 px-1 rounded">sys</span>'
                     : '';
                 rows.push(`
                     <tr class="hover:bg-slate-900/40 transition duration-150 border-b border-slate-900">
                         <td class="px-5 py-3 text-slate-500">${p.pid}</td>
                         <td class="px-5 py-3 text-slate-400 font-semibold">${p.user}</td>
-                        <td class="px-5 py-3 text-slate-200">
-                            <div class="flex items-center gap-1" style="padding-left:${indent}px">
-                                ${toggleBtn}
-                                <span class="text-slate-600 font-bold">></span>
-                                <span title="${p.label || p.name}">${p.name}</span>
+                        <td class="px-5 py-3">
+                            <div class="flex items-center gap-1 min-w-0" style="padding-left:${indent}px">
+                                ${nameCell}
                                 ${systemBadge}
                             </div>
                         </td>

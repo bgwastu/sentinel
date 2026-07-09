@@ -115,6 +115,29 @@ def _parse_proc_listen(path: Path, proto: str, inode_map: dict[str, tuple[int, s
     return sockets
 
 
+def _normalize_bind(bind: str) -> str:
+    if bind in {"0.0.0.0", "::", "*"}:
+        return "*"
+    if bind in {"127.0.0.1", "::1"}:
+        return "127.0.0.1"
+    return bind
+
+
+def _dedupe_dual_stack_sockets(sockets: list[dict]) -> list[dict]:
+    """Collapse IPv4/IPv6 dual-stack duplicates (0.0.0.0 + ::, 127.0.0.1 + ::1)."""
+    grouped: dict[tuple[int, str], dict] = {}
+    for sock in sockets:
+        key = (sock["port"], sock["proto"])
+        bind = _normalize_bind(sock["bind"])
+        existing = grouped.get(key)
+        if not existing:
+            grouped[key] = {**sock, "bind": bind}
+            continue
+        if existing["process"] == "unknown" and sock["process"] != "unknown":
+            existing["process"] = sock["process"]
+    return list(grouped.values())
+
+
 def collect_listening_sockets() -> list[dict]:
     inode_map = _build_socket_inode_map()
     tcp4 = _parse_proc_listen(host_path("proc/net/tcp"), "TCP", inode_map, ipv6=False)
@@ -122,14 +145,7 @@ def collect_listening_sockets() -> list[dict]:
     udp4 = _parse_proc_listen(host_path("proc/net/udp"), "UDP", inode_map, ipv6=False)
     udp6 = _parse_proc_listen(host_path("proc/net/udp6"), "UDP", inode_map, ipv6=True)
 
-    seen: set[tuple] = set()
-    merged: list[dict] = []
-    for sock in tcp4 + tcp6 + udp4 + udp6:
-        key = (sock["port"], sock["bind"], sock["proto"])
-        if key in seen:
-            continue
-        seen.add(key)
-        merged.append(sock)
+    merged = _dedupe_dual_stack_sockets(tcp4 + tcp6 + udp4 + udp6)
 
     if not merged:
         try:
@@ -154,6 +170,7 @@ def collect_listening_sockets() -> list[dict]:
         except (psutil.AccessDenied, PermissionError):
             pass
 
+    merged = _dedupe_dual_stack_sockets(merged)
     return sorted(merged, key=lambda s: (s["port"], s["bind"]))
 
 
