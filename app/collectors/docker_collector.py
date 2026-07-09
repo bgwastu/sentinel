@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
@@ -8,6 +10,9 @@ try:
     import docker
 except ImportError:
     docker = None  # type: ignore
+
+DOCKER_CACHE_TTL = 3.0
+_docker_cache: tuple[list[dict], float] = ([], 0.0)
 
 
 def _docker_client():
@@ -99,13 +104,27 @@ def _human_status(container) -> str:
 
 
 def collect_docker() -> list[dict]:
+    global _docker_cache
+    cached, cached_at = _docker_cache
+    if cached and (time.time() - cached_at) < DOCKER_CACHE_TTL:
+        return cached
+
     client = _docker_client()
     if client is None:
         return []
 
     containers: list[dict] = []
     try:
-        for container in client.containers.list(all=True):
+        listed = client.containers.list(all=True)
+        running = [c for c in listed if c.status == "running"]
+        stats_map: dict[str, tuple[float, float]] = {}
+
+        if running:
+            with ThreadPoolExecutor(max_workers=min(4, len(running))) as pool:
+                pairs = list(zip(running, pool.map(_container_stats, running)))
+            stats_map = {container.id: stats for container, stats in pairs}
+
+        for container in listed:
             name = container.name.lstrip("/")
             image = (
                 container.image.tags[0]
@@ -113,7 +132,7 @@ def collect_docker() -> list[dict]:
                 else (container.image.short_id or "unknown")
             )
             status = _human_status(container)
-            cpu_pct, mem_pct = _container_stats(container)
+            cpu_pct, mem_pct = stats_map.get(container.id, (0.0, 0.0))
             containers.append(
                 {
                     "id": _short_id(container.id),
@@ -127,4 +146,5 @@ def collect_docker() -> list[dict]:
     except Exception:
         return []
 
+    _docker_cache = (containers, time.time())
     return containers

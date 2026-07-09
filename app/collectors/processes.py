@@ -34,12 +34,6 @@ def _process_name(proc: psutil.Process) -> str:
 
 
 def _process_label(proc: psutil.Process) -> str:
-    try:
-        cmdline = proc.cmdline()
-        if cmdline:
-            return " ".join(cmdline)[:96]
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        pass
     return _process_name(proc)
 
 
