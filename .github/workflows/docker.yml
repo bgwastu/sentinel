@@ -42,7 +42,7 @@ jobs:
           import json, urllib.request
           data = json.load(urllib.request.urlopen("http://localhost:8080/api/telemetry"))
           required = [
-              "hostname", "processTree", "processCount", "history", "docker",
+              "hostname", "processes", "history", "docker",
               "networkInterfaces", "listeningSockets",
           ]
           missing = [k for k in required if k not in data]
