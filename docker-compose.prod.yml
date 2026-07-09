@@ -1,0 +1,15 @@
+services:
+  sentinel:
+    image: ghcr.io/bgwastu/sentinel:latest
+    container_name: sentinel
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/host:ro
+    environment:
+      - HOST_PREFIX=/host
+      - PORT=8080
+      - HISTORY_PATH=/host/var/lib/sentinel/history.json
+      - STORAGE_SCAN_INTERVAL=3600
