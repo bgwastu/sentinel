@@ -3,6 +3,7 @@ services:
     image: ghcr.io/bgwastu/sentinel:latest
     container_name: sentinel
     restart: unless-stopped
+    privileged: true
     network_mode: host
     pid: host
     volumes:

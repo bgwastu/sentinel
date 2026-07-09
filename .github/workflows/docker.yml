@@ -50,6 +50,7 @@ jobs:
               raise SystemExit(f"Missing keys: {missing}")
           assert len(data["history"]["cpu"]) == 15
           assert len(data["history"]["timestamps"]) == 15
+          assert all(isinstance(v, (int, float)) for v in data["history"]["timestamps"])
           print("telemetry ok")
           PY
 

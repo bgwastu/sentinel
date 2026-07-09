@@ -22,6 +22,7 @@ if missing:
     raise SystemExit(f"Missing keys: {missing}")
 assert isinstance(data["history"]["cpu"], list) and len(data["history"]["cpu"]) == 15
 assert isinstance(data["history"]["timestamps"], list) and len(data["history"]["timestamps"]) == 15
+assert all(isinstance(v, (int, float)) for v in data["history"]["timestamps"])
 assert isinstance(data["processTree"], list)
 print("schema ok")
 PY

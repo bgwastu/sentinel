@@ -18,6 +18,26 @@ from app.collectors.host import (
 )
 
 
+def _flatten_process_tree(tree: list[dict], limit: int = 200) -> list[dict]:
+    flat: list[dict] = []
+
+    def walk(nodes: list[dict]) -> None:
+        for node in nodes:
+            flat.append(
+                {
+                    "pid": node["pid"],
+                    "user": node["user"],
+                    "cpu": node["cpu"],
+                    "mem_pct": node["mem_pct"],
+                    "name": node["name"],
+                }
+            )
+            walk(node.get("children", []))
+
+    walk(tree)
+    return flat[:limit]
+
+
 async def _sparkline_loop() -> None:
     while True:
         await asyncio.sleep(SPARKLINE_INTERVAL)
@@ -35,8 +55,9 @@ async def _sparkline_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    get_cpu_percent()
     metric_history.load()
-    storage.ensure_storage_scan(force=True)
+    storage.ensure_storage_scan(force=False)
     task = asyncio.create_task(_sparkline_loop())
     yield
     task.cancel()
@@ -53,13 +74,11 @@ app = FastAPI(title="Sentinel", description="Host monitoring dashboard", lifespa
 def get_telemetry(
     search: str = Query("", description="Filter processes by name or user"),
     sort: str = Query("cpu", description="Sort processes by cpu, mem, or pid"),
-    show_system: bool = Query(False, description="Include system processes in tree"),
 ):
     host_data = host.collect_host_snapshot()
     process_tree, process_count = processes.collect_process_tree(
         search=search,
         sort_by=sort,
-        show_system=show_system,
     )
 
     payload = {
@@ -77,7 +96,7 @@ def get_telemetry(
         "history": host_data["history"],
         "processTree": process_tree,
         "processCount": process_count,
-        "processes": processes.collect_processes(search=search, sort_by=sort),
+        "processes": _flatten_process_tree(process_tree),
         "docker": docker_collector.collect_docker(),
         "cron": cron.collect_cron(),
         "storage": storage.get_storage_directories(),

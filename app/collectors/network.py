@@ -4,12 +4,14 @@ import os
 import re
 import socket
 import struct
+import subprocess
 import time
 import urllib.request
 from pathlib import Path
 
 import psutil
 
+from app.config import HOST_PREFIX
 from app.utils import format_bytes, host_path
 
 TCP_STATES = {
@@ -18,7 +20,14 @@ TCP_STATES = {
 }
 
 PUBLIC_IP_CACHE_TTL = 3600
+SOCKET_CACHE_TTL = 2.0
 _public_ip_cache: tuple[str | None, float] = (None, 0.0)
+_socket_cache: tuple[list[dict], float] = ([], 0.0)
+
+SS_LOCAL_RE = re.compile(
+    r"^(?P<bind>\[[^\]]+\]|[^:\s%]+)(?:%[^\s]+)?:(?P<port>\d+)$"
+)
+SS_PROCESS_RE = re.compile(r'users:\(\("(?P<name>[^"]+)"')
 
 
 def _hex_ip(hex_addr: str) -> str:
@@ -41,36 +50,89 @@ def _hex_ip6(hex_addr: str) -> str:
         return hex_addr
 
 
+def _run_ss(args: list[str]) -> str:
+    for cmd in (["ss", *args], ["chroot", str(HOST_PREFIX if HOST_PREFIX.exists() else Path("/host")), "/usr/bin/ss", *args]):
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+    return ""
+
+
+def _parse_ss_listeners(proto: str) -> list[dict]:
+    flag = "-lntp" if proto == "TCP" else "-lnup"
+    output = _run_ss([flag])
+    sockets: list[dict] = []
+    for line in output.splitlines():
+        if "LISTEN" not in line:
+            continue
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        match = SS_LOCAL_RE.match(parts[3])
+        if not match:
+            continue
+        bind = match.group("bind")
+        if bind.startswith("[") and bind.endswith("]"):
+            bind = bind[1:-1]
+        port = int(match.group("port"))
+        proc_match = SS_PROCESS_RE.search(line)
+        proc_name = proc_match.group("name") if proc_match else "unknown"
+        sockets.append(
+            {
+                "port": port,
+                "bind": bind,
+                "proto": proto,
+                "process": proc_name,
+                "status": "LISTEN",
+            }
+        )
+    return sockets
+
+
 def _build_socket_inode_map() -> dict[str, tuple[int, str]]:
     """Map socket inode string -> (pid, process name)."""
     inode_map: dict[str, tuple[int, str]] = {}
-    proc_root = host_path("proc")
-    if not proc_root.exists():
-        proc_root = Path("/proc")
+    proc_roots = []
+    for candidate in (Path("/proc"), host_path("proc")):
+        if candidate.exists() and candidate not in proc_roots:
+            proc_roots.append(candidate)
 
-    for pid_dir in proc_root.iterdir():
-        if not pid_dir.name.isdigit():
-            continue
-        pid = int(pid_dir.name)
-        try:
-            proc_name = psutil.Process(pid).name()
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            proc_name = "unknown"
-
-        fd_dir = pid_dir / "fd"
-        if not fd_dir.is_dir():
-            continue
-        try:
-            for fd in fd_dir.iterdir():
+    for proc_root in proc_roots:
+        for pid_dir in proc_root.iterdir():
+            if not pid_dir.name.isdigit():
+                continue
+            pid = int(pid_dir.name)
+            try:
+                proc_name = (proc_root / pid_dir.name / "comm").read_text().strip()
+            except OSError:
                 try:
-                    target = os.readlink(fd)
-                except OSError:
-                    continue
-                match = re.match(r"socket:\[(\d+)\]", target)
-                if match:
-                    inode_map[match.group(1)] = (pid, proc_name)
-        except (OSError, PermissionError):
-            continue
+                    proc_name = psutil.Process(pid).name()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    proc_name = "unknown"
+
+            fd_dir = pid_dir / "fd"
+            if not fd_dir.is_dir():
+                continue
+            try:
+                for fd in fd_dir.iterdir():
+                    try:
+                        target = os.readlink(fd)
+                    except OSError:
+                        continue
+                    match = re.match(r"socket:\[(\d+)\]", target)
+                    if match:
+                        inode_map[match.group(1)] = (pid, proc_name)
+            except (OSError, PermissionError):
+                continue
 
     return inode_map
 
@@ -139,13 +201,21 @@ def _dedupe_dual_stack_sockets(sockets: list[dict]) -> list[dict]:
 
 
 def collect_listening_sockets() -> list[dict]:
-    inode_map = _build_socket_inode_map()
-    tcp4 = _parse_proc_listen(host_path("proc/net/tcp"), "TCP", inode_map, ipv6=False)
-    tcp6 = _parse_proc_listen(host_path("proc/net/tcp6"), "TCP", inode_map, ipv6=True)
-    udp4 = _parse_proc_listen(host_path("proc/net/udp"), "UDP", inode_map, ipv6=False)
-    udp6 = _parse_proc_listen(host_path("proc/net/udp6"), "UDP", inode_map, ipv6=True)
+    global _socket_cache
+    cached, cached_at = _socket_cache
+    if cached and (time.time() - cached_at) < SOCKET_CACHE_TTL:
+        return cached
 
-    merged = _dedupe_dual_stack_sockets(tcp4 + tcp6 + udp4 + udp6)
+    ss_sockets = _parse_ss_listeners("TCP") + _parse_ss_listeners("UDP")
+    merged = _dedupe_dual_stack_sockets(ss_sockets)
+
+    if not merged or all(s["process"] == "unknown" for s in merged):
+        inode_map = _build_socket_inode_map()
+        tcp4 = _parse_proc_listen(host_path("proc/net/tcp"), "TCP", inode_map, ipv6=False)
+        tcp6 = _parse_proc_listen(host_path("proc/net/tcp6"), "TCP", inode_map, ipv6=True)
+        udp4 = _parse_proc_listen(host_path("proc/net/udp"), "UDP", inode_map, ipv6=False)
+        udp6 = _parse_proc_listen(host_path("proc/net/udp6"), "UDP", inode_map, ipv6=True)
+        merged = _dedupe_dual_stack_sockets(tcp4 + tcp6 + udp4 + udp6)
 
     if not merged:
         try:
@@ -169,9 +239,11 @@ def collect_listening_sockets() -> list[dict]:
                 )
         except (psutil.AccessDenied, PermissionError):
             pass
+        merged = _dedupe_dual_stack_sockets(merged)
 
-    merged = _dedupe_dual_stack_sockets(merged)
-    return sorted(merged, key=lambda s: (s["port"], s["bind"]))
+    merged = sorted(merged, key=lambda s: (s["port"], s["bind"]))
+    _socket_cache = (merged, time.time())
+    return merged
 
 
 def get_public_ip() -> str | None:

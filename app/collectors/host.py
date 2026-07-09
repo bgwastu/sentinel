@@ -7,7 +7,6 @@ import socket
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
 
@@ -17,9 +16,12 @@ from app.config import HISTORY_PATH, HISTORY_SIZE, HOST_PREFIX, SPARKLINE_INTERV
 from app.utils import format_bytes_per_sec, format_uptime, gb, host_path
 
 
-def _iso_timestamp(offset_seconds: float = 0.0) -> str:
-    ts = datetime.now(timezone.utc) - timedelta(seconds=offset_seconds)
-    return ts.strftime("%Y-%m-%d %H:%M:%S UTC")
+_cpu_primed = False
+_persist_counter = 0
+
+
+def _timestamp_epoch(offset_seconds: float = 0.0) -> float:
+    return round(time.time() - offset_seconds, 3)
 
 
 @dataclass
@@ -28,7 +30,7 @@ class MetricHistory:
     memory: deque[float] = field(default_factory=lambda: deque(maxlen=HISTORY_SIZE))
     disk: deque[float] = field(default_factory=lambda: deque(maxlen=HISTORY_SIZE))
     network: deque[float] = field(default_factory=lambda: deque(maxlen=HISTORY_SIZE))
-    timestamps: deque[str] = field(default_factory=lambda: deque(maxlen=HISTORY_SIZE))
+    timestamps: deque[float] = field(default_factory=lambda: deque(maxlen=HISTORY_SIZE))
     lock: Lock = field(default_factory=Lock)
     _last_net: dict[str, tuple[int, int, float]] = field(default_factory=dict)
     _initialized: bool = False
@@ -42,13 +44,20 @@ class MetricHistory:
                 for key in ("cpu", "memory", "disk", "network"):
                     values = data.get(key, [])
                     getattr(self, key).extend(values[-HISTORY_SIZE:])
-                self.timestamps.extend(data.get("timestamps", [])[-HISTORY_SIZE:])
+                raw_ts = data.get("timestamps", [])[-HISTORY_SIZE:]
+                for value in raw_ts:
+                    if isinstance(value, (int, float)):
+                        self.timestamps.append(float(value))
                 if len(self.cpu) >= HISTORY_SIZE:
                     self._initialized = True
         except (OSError, json.JSONDecodeError, TypeError, ValueError):
             pass
 
     def _persist(self) -> None:
+        global _persist_counter
+        _persist_counter += 1
+        if _persist_counter % 5 != 0:
+            return
         try:
             HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
             payload = {
@@ -74,7 +83,7 @@ class MetricHistory:
                 self.memory.append(mem_pct)
                 self.disk.append(disk_pct)
                 self.network.append(net_rate)
-                self.timestamps.append(_iso_timestamp(offset))
+                self.timestamps.append(_timestamp_epoch(offset))
             self._initialized = True
             self._persist()
 
@@ -84,7 +93,7 @@ class MetricHistory:
             self.memory.append(mem_pct)
             self.disk.append(disk_pct)
             self.network.append(net_rate)
-            self.timestamps.append(_iso_timestamp())
+            self.timestamps.append(_timestamp_epoch())
             self._persist()
 
     def snapshot(self) -> dict[str, list]:
@@ -104,7 +113,7 @@ class MetricHistory:
         while len(network) < HISTORY_SIZE:
             network.insert(0, network[0] if network else 0.0)
         while len(timestamps) < HISTORY_SIZE:
-            timestamps.insert(0, timestamps[0] if timestamps else _iso_timestamp())
+            timestamps.insert(0, timestamps[0] if timestamps else _timestamp_epoch())
 
         return {
             "cpu": cpu[-HISTORY_SIZE:],
@@ -153,8 +162,12 @@ def get_load_avg() -> str:
 
 
 def get_cpu_percent() -> float:
+    global _cpu_primed
     try:
-        return round(psutil.cpu_percent(interval=0.1), 1)
+        if not _cpu_primed:
+            psutil.cpu_percent(interval=0.1)
+            _cpu_primed = True
+        return round(psutil.cpu_percent(interval=None), 1)
     except Exception:
         return 0.0
 

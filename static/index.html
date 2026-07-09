@@ -142,10 +142,6 @@
                             <p class="text-[10px] text-slate-500">Active Host Task Records: <span id="procCount">--</span></p>
                         </div>
                         <div class="flex flex-wrap gap-2 w-full sm:w-auto items-center">
-                            <label class="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 cursor-pointer">
-                                <input type="checkbox" id="showSystemProcs" class="rounded border-slate-700 bg-[#070a12] text-emerald-500 focus:ring-emerald-500/30">
-                                Show system processes
-                            </label>
                             <input type="text" id="procSearch" placeholder="Filter apps..." class="px-3 py-1.5 bg-[#070a12] border border-slate-800 rounded font-mono text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50 placeholder-slate-600 w-full sm:w-48">
                             <select id="procSort" class="px-2 py-1.5 bg-[#070a12] border border-slate-800 rounded font-mono text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50">
                                 <option value="cpu">Sort: CPU %</option>
@@ -296,34 +292,40 @@
         let memHistory = Array(15).fill(0);
         let diskHistory = Array(15).fill(0);
         let netHistory = Array(15).fill(0);
-        let historyTimestamps = Array(15).fill('');
+        let historyTimestamps = Array(15).fill(0);
 
         window.onload = function() {
             initSparklines();
             startTelemetryPolling();
-            if (!sessionStorage.getItem('sentinel_toast')) {
-                showToast('Telemetry initialised');
-                sessionStorage.setItem('sentinel_toast', '1');
-            }
             document.getElementById('publicIpBtn').addEventListener('click', copyPublicIp);
         };
 
-        function copyPublicIp() {
-            const ip = currentSrvData.publicIp;
-            if (!ip) return;
-            navigator.clipboard.writeText(ip).then(() => showToast('IP copied'));
+        function formatLocalTime(ts) {
+            const value = Number(ts);
+            if (!value) return '';
+            return new Date(value * 1000).toLocaleString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+            });
         }
 
-        function sparklineTooltipOptions(suffix) {
+        function formatNetRate(value) {
+            const rate = Number(value) || 0;
+            if (rate < 1024) return 'Idle';
+            if (rate < 1024 * 1024) return `${(rate / 1024).toFixed(1)} KB/s`;
+            return `${(rate / (1024 * 1024)).toFixed(1)} MB/s`;
+        }
+
+        function sparklineTooltipOptions(suffix, formatter = null) {
             return {
                 enabled: true,
                 displayColors: false,
                 callbacks: {
-                    title: (items) => {
-                        const idx = items[0]?.dataIndex ?? 0;
-                        return historyTimestamps[idx] || '';
-                    },
-                    label: (ctx) => `${ctx.parsed.y}${suffix}`,
+                    title: (items) => formatLocalTime(historyTimestamps[items[0]?.dataIndex ?? 0]),
+                    label: (ctx) => formatter ? formatter(ctx.parsed.y) : `${ctx.parsed.y}${suffix}`,
                 },
                 bodyFont: { weight: 'bold' },
             };
@@ -356,8 +358,14 @@
             netChartInstance = new Chart(document.getElementById('netSparkline').getContext('2d'), {
                 type: 'line',
                 data: { labels: Array(15).fill(''), datasets: [{ data: netHistory, borderColor: '#06b6d4', fill: false }] },
-                options: { ...baseOptions, plugins: { legend: { display: false }, tooltip: sparklineTooltipOptions(' B/s') } },
+                options: { ...baseOptions, plugins: { legend: { display: false }, tooltip: sparklineTooltipOptions('', formatNetRate) } },
             });
+        }
+
+        function copyPublicIp() {
+            const ip = currentSrvData.publicIp;
+            if (!ip) return;
+            navigator.clipboard.writeText(ip).then(() => showToast('IP copied'));
         }
 
         function startTelemetryPolling() {
@@ -369,8 +377,7 @@
         async function fetchTelemetry() {
             const searchVal = document.getElementById('procSearch').value;
             const sortVal = document.getElementById('procSort').value;
-            const showSystem = document.getElementById('showSystemProcs').checked;
-            const params = new URLSearchParams({ search: searchVal, sort: sortVal, show_system: showSystem });
+            const params = new URLSearchParams({ search: searchVal, sort: sortVal });
             try {
                 const res = await fetch(`/api/telemetry?${params}`);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -399,7 +406,7 @@
             memHistory = padHistory(hist.memory);
             diskHistory = padHistory(hist.disk);
             netHistory = padHistory(hist.network);
-            historyTimestamps = padHistory(hist.timestamps || [], 15, '');
+            historyTimestamps = padHistory(hist.timestamps || [], 15, 0);
 
             cpuChartInstance.data.datasets[0].data = cpuHistory;
             memChartInstance.data.datasets[0].data = memHistory;
@@ -523,10 +530,6 @@
 
         document.getElementById('procSearch').addEventListener('input', fetchTelemetry);
         document.getElementById('procSort').addEventListener('change', fetchTelemetry);
-        document.getElementById('showSystemProcs').addEventListener('change', () => {
-            expandedPids.clear();
-            fetchTelemetry();
-        });
 
         function buildDockerGrid() {
             const containerGrid = document.getElementById('dockerGrid');

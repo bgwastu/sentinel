@@ -132,7 +132,6 @@ def _trim_tree(nodes: list[dict], max_nodes: int, max_depth: int, depth: int = 0
 def collect_process_tree(
     search: str = "",
     sort_by: str = "cpu",
-    show_system: bool = False,
 ) -> tuple[list[dict], int]:
     raw_nodes: dict[int, dict] = {}
     procs = list(psutil.process_iter(["pid", "ppid", "username", "name", "memory_percent"]))
@@ -178,28 +177,19 @@ def collect_process_tree(
             continue
 
     total_count = len(raw_nodes)
-    visible = set(raw_nodes.keys())
-    if not show_system:
-        visible = {pid for pid, node in raw_nodes.items() if not node["is_system"]}
-
-    roots = _reparent_visible(raw_nodes, visible)
-    if show_system:
-        full_roots = []
-        for pid, node in raw_nodes.items():
-            node["children"] = []
-        for pid, node in raw_nodes.items():
-            ppid = node["ppid"]
-            if ppid in raw_nodes and ppid != pid:
-                raw_nodes[ppid]["children"].append(node)
-            else:
-                full_roots.append(node)
-        roots = full_roots
+    for pid, node in raw_nodes.items():
+        node["children"] = []
+    roots: list[dict] = []
+    for pid, node in raw_nodes.items():
+        ppid = node["ppid"]
+        if ppid in raw_nodes and ppid != pid:
+            raw_nodes[ppid]["children"].append(node)
+        else:
+            roots.append(node)
 
     needle = search.strip().lower()
     if needle:
         roots = _filter_tree(roots, needle)
-    elif not show_system:
-        roots = _prune_system(roots)
 
     _sort_nodes(roots, sort_by)
     roots = roots[:PROCESS_MAX_ROOTS]
@@ -213,6 +203,7 @@ def collect_processes(
     limit: int = 200,
 ) -> list[dict]:
     """Flat process list kept for backward compatibility."""
+    tree, _ = collect_process_tree(search=search, sort_by=sort_by)
     flat: list[dict] = []
 
     def walk(nodes: list[dict]) -> None:
@@ -228,6 +219,5 @@ def collect_processes(
             )
             walk(node["children"])
 
-    tree, _ = collect_process_tree(search=search, sort_by=sort_by, show_system=False)
     walk(tree)
     return flat[:limit]
