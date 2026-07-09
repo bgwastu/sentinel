@@ -74,7 +74,14 @@ SYSTEM_PROCESS_NAMES = {
     "rpc.idmapd",
     "rpc.gssd",
     "gssproxy",
-    "simplevisor",
+    "kdevtmpfs",
+    "kauditd",
+    "khungtaskd",
+    "oom_reaper",
+    "kcompactd",
+    "ksmd",
+    "khugepaged",
+    "psimon",
 }
 
 SCAN_DIRECTORIES = [

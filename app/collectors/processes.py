@@ -13,10 +13,14 @@ from app.config import (
 
 def _is_kernel_thread(proc: psutil.Process) -> bool:
     try:
-        if proc.pid == 0:
+        if proc.pid <= 2:
+            return True
+        if proc.ppid() == 2:
             return True
         name = proc.name()
         if name.startswith("["):
+            return True
+        if any(name.startswith(prefix) for prefix in ("kworker", "ksoftirq", "migration", "rcu_", "irq/")):
             return True
         status = proc.status()
         if status == psutil.STATUS_IDLE and name in {"kthreadd", "ksoftirqd", "migration"}:
