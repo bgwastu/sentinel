@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel - System Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            900: '#0f172a',
+                        },
+                        statusOk: '#10b981',
+                        statusWarning: '#f59e0b',
+                        statusAlert: '#ef4444',
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'Fira Code', 'Geist Mono', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+                        sans: ['Geist', 'Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: #090d16; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: #334155; }
+        .terminal-grid {
+            background-size: 20px 20px;
+            background-image: radial-gradient(circle, rgba(30, 41, 59, 0.15) 1px, transparent 1px);
+        }
+    </style>
+</head>
+<body class="bg-[#090d16] text-[#e2e8f0] min-h-screen font-sans flex flex-col selection:bg-slate-800 selection:text-white terminal-grid antialiased">
+
+    <header class="border-b border-slate-800 bg-[#0c1220] px-4 py-3 sm:px-6">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="flex flex-col">
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-sm font-mono font-bold tracking-wider text-slate-100 uppercase animate-none" id="hostTitle">loading...</h1>
+                        <span class="flex h-2 w-2 relative">
+                            <span id="statusPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span id="statusIndicator" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2 mt-0.5">
+                        <span class="text-[10px] font-mono text-slate-400" id="metaUptime">uptime: --</span>
+                        <span class="text-[10px] text-slate-600 font-mono">•</span>
+                        <span class="text-[10px] font-mono text-slate-400" id="metaKernel">linux</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-6 text-xs font-mono text-slate-400">
+                <div class="hidden sm:block"><span class="text-slate-500">CPU:</span> <span id="tickerCpu" class="text-slate-300">--</span></div>
+                <div class="hidden sm:block"><span class="text-slate-500">RAM:</span> <span id="tickerMem" class="text-slate-300">--</span></div>
+                <div class="hidden md:block"><span class="text-slate-500">DISK:</span> <span id="tickerDisk" class="text-slate-300">--</span></div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
+        <div class="border-b border-slate-800">
+            <nav class="flex flex-wrap gap-1 -mb-px" aria-label="Tabs">
+                <button onclick="switchTab('system')" id="tabBtn-system" class="tab-btn px-4 py-2.5 font-mono text-xs font-medium border-b-2 border-emerald-500 text-emerald-400 transition-all duration-150 focus:outline-none flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2"/></svg>
+                    SYSTEM & PROCESSES
+                </button>
+                <button onclick="switchTab('docker')" id="tabBtn-docker" class="tab-btn px-4 py-2.5 font-mono text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all duration-150 focus:outline-none flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M13.983 8.187h3.081V5.11h-3.081v3.077zm3.437 0h3.084V5.11h-3.084v3.077zm-3.437-3.434h3.081V1.677h-3.081v3.076zm0 6.871h3.081V8.547h-3.081v3.077zm-3.437-3.437h3.081V5.11H10.546v3.077zM10.546 4.75h3.081V1.677h-3.081v3.073zm-3.436 6.871h3.081V8.547H7.11v3.077zm0-3.437h3.081V5.11H7.11v3.077zM3.672 11.621h3.081V8.547H3.672v3.077zm19.982 1.341c-.131-.341-.366-.632-.676-.826a4.29 4.29 0 00-.776-.388c-.282-.103-.574-.18-.871-.23a9.6 9.6 0 00-1.026-.067h-.431c-.126 0-.251.003-.374.009v-.004a4.343 4.343 0 00-1.898.431c-.347.168-.673.385-.97.643-.377-.144-.768-.254-1.168-.328v-.006l-.161-.027c-.201-.035-.404-.063-.609-.082a17.29 17.29 0 00-1.579-.06H2.17c-.123 0-.244.015-.363.045a1.144 1.144 0 00-.918 1.13c-.004.167.027.333.09.488a4.913 4.913 0 001.764 2.378c.854.606 1.87 1.011 2.946 1.173a14.773 14.773 0 006.182-.249c.583-.179 1.155-.422 1.698-.727.429.351.905.645 1.417.876.549.255 1.127.447 1.724.57.854.175 1.723.256 2.593.243.687-.01 1.373-.082 2.046-.217l.088-.018a4.524 4.524 0 002.324-1.28c.343-.347.604-.767.761-1.229.141-.424.201-.87.177-1.314a4.423 4.423 0 00-.192-1.242z"/></svg>
+                    DOCKER
+                </button>
+                <button onclick="switchTab('cron')" id="tabBtn-cron" class="tab-btn px-4 py-2.5 font-mono text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all duration-150 focus:outline-none flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    CRONTABS
+                </button>
+                <button onclick="switchTab('network')" id="tabBtn-network" class="tab-btn px-4 py-2.5 font-mono text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all duration-150 focus:outline-none flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>
+                    NETWORK
+                </button>
+                <button onclick="switchTab('storage')" id="tabBtn-storage" class="tab-btn px-4 py-2.5 font-mono text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all duration-150 focus:outline-none flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+                    DISK ANALYZER
+                </button>
+            </nav>
+        </div>
+
+        <div class="flex-1">
+            <div id="tab-system" class="tab-panel flex flex-col gap-6">
+                <div class="bg-[#0b101c] border border-slate-800 rounded-lg overflow-hidden">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 lg:divide-x divide-slate-800">
+                        <div class="p-4 font-mono flex flex-col justify-between h-[125px]">
+                            <div>
+                                <span class="text-[10px] text-slate-500 uppercase tracking-wider block">CPU</span>
+                                <span class="text-xl font-bold text-slate-100" id="cpuValText">--</span>
+                                <span class="text-[10px] text-slate-500 block mt-0.5" id="cpuCoresText">--</span>
+                            </div>
+                            <div class="h-10 w-full mt-2 relative"><canvas id="cpuSparkline"></canvas></div>
+                        </div>
+                        <div class="p-4 font-mono flex flex-col justify-between h-[125px]">
+                            <div>
+                                <span class="text-[10px] text-slate-500 uppercase tracking-wider block">Memory</span>
+                                <span class="text-xl font-bold text-slate-100" id="memValText">--</span>
+                                <span class="text-[10px] text-slate-500 block mt-0.5" id="memPctText">--</span>
+                            </div>
+                            <div class="h-10 w-full mt-2 relative"><canvas id="memSparkline"></canvas></div>
+                        </div>
+                        <div class="p-4 font-mono flex flex-col justify-between h-[125px]">
+                            <div>
+                                <span class="text-[10px] text-slate-500 uppercase tracking-wider block">Disk</span>
+                                <span class="text-xl font-bold text-slate-100" id="diskValText">--</span>
+                                <span class="text-[10px] text-slate-500 block mt-0.5" id="diskPctText">--</span>
+                            </div>
+                            <div class="h-10 w-full mt-2 relative"><canvas id="diskSparkline"></canvas></div>
+                        </div>
+                        <div class="p-4 font-mono flex flex-col justify-between h-[125px]">
+                            <div>
+                                <span class="text-[10px] text-slate-500 uppercase tracking-wider block">Network</span>
+                                <span class="text-xl font-bold text-slate-100" id="netValText">--</span>
+                                <span class="text-[10px] text-slate-500 block mt-0.5" id="netMetaText">--</span>
+                            </div>
+                            <div class="h-10 w-full mt-2 relative"><canvas id="netSparkline"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-[#0b101c] border border-slate-800/80 rounded overflow-hidden">
+                    <div class="p-4 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div class="font-mono">
+                            <h3 class="text-xs font-bold uppercase text-slate-300">System Activity / Apps running</h3>
+                            <p class="text-[10px] text-slate-500">Active Host Task Records: <span id="procCount">--</span></p>
+                        </div>
+                        <div class="flex gap-2 w-full sm:w-auto">
+                            <input type="text" id="procSearch" placeholder="Filter apps..." class="px-3 py-1.5 bg-[#070a12] border border-slate-800 rounded font-mono text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50 placeholder-slate-600 w-full sm:w-48">
+                            <select id="procSort" class="px-2 py-1.5 bg-[#070a12] border border-slate-800 rounded font-mono text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50">
+                                <option value="cpu">Sort: CPU %</option>
+                                <option value="mem">Sort: RAM %</option>
+                                <option value="pid">Sort: PID</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left font-mono text-xs">
+                            <thead class="bg-[#070a12] text-slate-500 border-b border-slate-800 uppercase text-[10px] tracking-wider">
+                                <tr>
+                                    <th class="px-5 py-3">PID</th>
+                                    <th class="px-5 py-3">User</th>
+                                    <th class="px-5 py-3">Executable Name</th>
+                                    <th class="px-5 py-3 text-right">CPU Allocation</th>
+                                    <th class="px-5 py-3 text-right">Memory (RAM) %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="processTableBody" class="divide-y divide-slate-900"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-docker" class="tab-panel hidden flex flex-col gap-4">
+                <div class="flex justify-between items-center bg-[#0b101c] border border-slate-800/80 p-4 rounded font-mono">
+                    <div>
+                        <h3 class="text-xs font-bold uppercase text-slate-300">Containerized Workloads</h3>
+                        <p class="text-[10px] text-slate-500">Live Docker engine daemon socket status</p>
+                    </div>
+                    <div class="flex gap-4 text-xs">
+                        <div><span class="text-slate-500">ACTIVE:</span> <span id="dockRunningCount" class="text-emerald-400 font-bold">0</span></div>
+                        <div class="border-l border-slate-800 pl-4"><span class="text-slate-500">TOTAL:</span> <span id="dockTotalCount" class="text-slate-300">0</span></div>
+                    </div>
+                </div>
+                <div id="dockerGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            </div>
+
+            <div id="tab-cron" class="tab-panel hidden flex flex-col">
+                <div class="bg-[#0b101c] border border-slate-800/80 rounded overflow-hidden">
+                    <div class="p-4 border-b border-slate-800">
+                        <h3 class="text-xs font-bold uppercase text-slate-300 font-mono">Crontab Jobs Config</h3>
+                        <p class="text-[10px] text-slate-500 font-mono">Scheduled system cron definitions located in crontabs</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left font-mono text-xs">
+                            <thead class="bg-[#070a12] text-slate-500 border-b border-slate-800 uppercase text-[10px]">
+                                <tr>
+                                    <th class="px-5 py-3">Schedule Spec</th>
+                                    <th class="px-5 py-3">Task Owner</th>
+                                    <th class="px-5 py-3">Instruction Path</th>
+                                    <th class="px-5 py-3 text-right">Human Summary</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cronTableBody" class="divide-y divide-slate-900 text-slate-300"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-network" class="tab-panel hidden flex flex-col gap-6 font-mono">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-[#0b101c] border border-slate-800/80 rounded p-4 flex flex-col gap-4">
+                        <div>
+                            <h3 class="text-xs font-bold uppercase text-slate-300">NIC Interface Telemetry</h3>
+                            <p class="text-[10px] text-slate-500 font-mono">Hardware network interface cards status</p>
+                        </div>
+                        <div id="interfaceList" class="flex flex-col gap-3"></div>
+                    </div>
+                    <div class="bg-[#0b101c] border border-slate-800/80 rounded p-5 lg:col-span-2">
+                        <div class="mb-4">
+                            <h3 class="text-xs font-bold uppercase text-slate-300">Listening Sockets Matrix</h3>
+                            <p class="text-[10px] text-slate-500">Active port bindings configured on loopback & local interfaces</p>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left font-mono text-xs">
+                                <thead class="bg-[#070a12] text-slate-500 border-b border-slate-800 uppercase text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-2.5">Port</th>
+                                        <th class="px-4 py-2.5">Bind Address</th>
+                                        <th class="px-4 py-2.5">Protocol</th>
+                                        <th class="px-4 py-2.5">Assigned Process / App</th>
+                                        <th class="px-4 py-2.5 text-right">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="networkSocketsTableBody" class="divide-y divide-slate-900 text-slate-300"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-storage" class="tab-panel hidden flex flex-col gap-6">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 font-mono">
+                    <div class="bg-[#0b101c] border border-slate-800/80 rounded p-4 flex flex-col gap-4">
+                        <div>
+                            <h3 class="text-xs font-bold uppercase text-slate-300">Partitions & Mountpoints</h3>
+                            <p class="text-[10px] text-slate-500">Active storage hardware mounts</p>
+                        </div>
+                        <div id="mountList" class="flex flex-col gap-3"></div>
+                    </div>
+                    <div class="bg-[#0b101c] border border-slate-800/80 rounded p-5 lg:col-span-2">
+                        <div class="mb-5">
+                            <h3 class="text-xs font-bold uppercase text-slate-300">Largest Directories On Host</h3>
+                            <p class="text-[10px] text-slate-500">Sorted from biggest to smallest contributors on root filesystem</p>
+                        </div>
+                        <div id="storageBarContainer" class="flex flex-col gap-4"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast" class="fixed bottom-5 right-5 z-50 bg-slate-900 border border-slate-800 font-mono text-xs text-emerald-400 px-4 py-2.5 rounded shadow-xl flex items-center gap-2 transition-all transform translate-y-20 opacity-0 pointer-events-none">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+        <span id="toastMessage">Telemetry initialised</span>
+    </div>
+
+    <script>
+        let currentSrvData = {
+            hostname: 'loading',
+            uptime: '--',
+            cores: 0,
+            load: '0, 0, 0',
+            cpu: 0,
+            memory: { total: 0, used: 0, free: 0 },
+            disk: { total: 0, used: 0, free: 0 },
+            network: { rate: '0 B/s' },
+            processes: [],
+            docker: [],
+            cron: [],
+            storage: [],
+            partitions: [],
+            networkInterfaces: [],
+            listeningSockets: []
+        };
+
+        let livePollInterval = null;
+        let cpuChartInstance, memChartInstance, diskChartInstance, netChartInstance;
+        let cpuHistory = Array(15).fill(0);
+        let memHistory = Array(15).fill(0);
+        let diskHistory = Array(15).fill(0);
+        let netHistory = Array(15).fill(0);
+
+        window.onload = function() {
+            initSparklines();
+            startTelemetryPolling();
+            showToast('Telemetry initialised');
+        };
+
+        function initSparklines() {
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                scales: { x: { display: false }, y: { display: false, min: 0 } },
+                elements: { point: { radius: 0 }, line: { tension: 0.1, borderWidth: 1.5 } }
+            };
+
+            cpuChartInstance = new Chart(document.getElementById('cpuSparkline').getContext('2d'), {
+                type: 'line',
+                data: { labels: Array(15).fill(''), datasets: [{ data: cpuHistory, borderColor: '#f97316', fill: false }] },
+                options: chartOptions
+            });
+            memChartInstance = new Chart(document.getElementById('memSparkline').getContext('2d'), {
+                type: 'line',
+                data: { labels: Array(15).fill(''), datasets: [{ data: memHistory, borderColor: '#3b82f6', fill: false }] },
+                options: chartOptions
+            });
+            diskChartInstance = new Chart(document.getElementById('diskSparkline').getContext('2d'), {
+                type: 'line',
+                data: { labels: Array(15).fill(''), datasets: [{ data: diskHistory, borderColor: '#22c55e', fill: false }] },
+                options: chartOptions
+            });
+            netChartInstance = new Chart(document.getElementById('netSparkline').getContext('2d'), {
+                type: 'line',
+                data: { labels: Array(15).fill(''), datasets: [{ data: netHistory, borderColor: '#06b6d4', fill: false }] },
+                options: chartOptions
+            });
+        }
+
+        function startTelemetryPolling() {
+            if (livePollInterval) clearInterval(livePollInterval);
+            fetchTelemetry();
+            livePollInterval = setInterval(fetchTelemetry, 2000);
+        }
+
+        async function fetchTelemetry() {
+            const searchVal = document.getElementById('procSearch').value;
+            const sortVal = document.getElementById('procSort').value;
+            const params = new URLSearchParams({ search: searchVal, sort: sortVal });
+            try {
+                const res = await fetch(`/api/telemetry?${params}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                currentSrvData = await res.json();
+                updateSparklinesFromHistory(currentSrvData.history);
+                updateUI();
+            } catch (err) {
+                console.error('Telemetry fetch failed:', err);
+            }
+        }
+
+        function padHistory(arr, size = 15) {
+            const copy = (arr || []).slice(-size);
+            while (copy.length < size) copy.unshift(copy[0] || 0);
+            return copy;
+        }
+
+        function updateSparklinesFromHistory(hist) {
+            if (!hist) return;
+            cpuHistory = padHistory(hist.cpu);
+            memHistory = padHistory(hist.memory);
+            diskHistory = padHistory(hist.disk);
+            netHistory = padHistory(hist.network);
+
+            cpuChartInstance.data.datasets[0].data = cpuHistory;
+            memChartInstance.data.datasets[0].data = memHistory;
+            diskChartInstance.data.datasets[0].data = diskHistory;
+            netChartInstance.data.datasets[0].data = netHistory;
+
+            cpuChartInstance.update('none');
+            memChartInstance.update('none');
+            diskChartInstance.update('none');
+            netChartInstance.update('none');
+        }
+
+        function updateUI() {
+            document.getElementById('hostTitle').innerText = currentSrvData.hostname;
+            document.getElementById('metaUptime').innerText = `uptime: ${currentSrvData.uptime}`;
+            document.getElementById('metaKernel').innerText = currentSrvData.kernel || 'linux';
+            updateUIOverviewOnly();
+            buildProcessesTable();
+            buildDockerGrid();
+            buildCronTable();
+            buildNetworkView();
+            buildStorageView();
+        }
+
+        function evaluateServerHealth(cpu, memPct, diskPct) {
+            const statusPing = document.getElementById('statusPing');
+            const statusIndicator = document.getElementById('statusIndicator');
+            if (cpu > 80.0 || memPct > 85.0 || diskPct > 90.0) {
+                statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75';
+                statusIndicator.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500';
+            } else {
+                statusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
+                statusIndicator.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500';
+            }
+        }
+
+        function updateUIOverviewOnly() {
+            document.getElementById('cpuValText').innerText = `${currentSrvData.cpu}%`;
+            document.getElementById('cpuCoresText').innerText = `${currentSrvData.cores} cores — Load ${currentSrvData.load}`;
+            document.getElementById('tickerCpu').innerText = `${currentSrvData.cpu}%`;
+
+            const memUsed = parseFloat(currentSrvData.memory.used).toFixed(1);
+            const memTotal = parseFloat(currentSrvData.memory.total).toFixed(1);
+            const memPct = memTotal > 0 ? ((memUsed / memTotal) * 100).toFixed(1) : '0.0';
+            document.getElementById('memValText').innerText = `${memPct}%`;
+            document.getElementById('memPctText').innerText = `${memUsed} GB / ${memTotal} GB`;
+            document.getElementById('tickerMem').innerText = `${memPct}%`;
+
+            const diskUsed = currentSrvData.disk.used;
+            const diskTotal = currentSrvData.disk.total;
+            const diskPct = diskTotal > 0 ? ((diskUsed / diskTotal) * 100).toFixed(1) : '0.0';
+            document.getElementById('diskValText').innerText = `${diskPct}%`;
+            document.getElementById('diskPctText').innerText = `${diskUsed} GB / ${diskTotal} GB`;
+            document.getElementById('tickerDisk').innerText = `${diskPct}%`;
+
+            document.getElementById('netValText').innerText = currentSrvData.network.rate;
+            document.getElementById('netMetaText').innerText = currentSrvData.networkInterface || 'eth0';
+
+            evaluateServerHealth(parseFloat(currentSrvData.cpu), parseFloat(memPct), parseFloat(diskPct));
+        }
+
+        function buildProcessesTable() {
+            const tbody = document.getElementById('processTableBody');
+            tbody.innerHTML = '';
+            const procs = currentSrvData.processes || [];
+            document.getElementById('procCount').innerText = procs.length;
+            procs.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-900/40 transition duration-150 border-b border-slate-900';
+                tr.innerHTML = `
+                    <td class="px-5 py-3 text-slate-500">${p.pid}</td>
+                    <td class="px-5 py-3 text-slate-400 font-semibold">${p.user}</td>
+                    <td class="px-5 py-3 text-slate-200"><span class="text-slate-600 font-bold">></span> ${p.name}</td>
+                    <td class="px-5 py-3 text-right font-bold text-emerald-400">${p.cpu}%</td>
+                    <td class="px-5 py-3 text-right text-slate-400">${p.mem_pct}%</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        document.getElementById('procSearch').addEventListener('input', fetchTelemetry);
+        document.getElementById('procSort').addEventListener('change', fetchTelemetry);
+
+        function buildDockerGrid() {
+            const containerGrid = document.getElementById('dockerGrid');
+            containerGrid.innerHTML = '';
+            let runningCount = 0;
+            (currentSrvData.docker || []).forEach(c => {
+                const isRunning = c.status.toLowerCase().includes('up');
+                if (isRunning) runningCount++;
+                const card = document.createElement('div');
+                card.className = `bg-[#0b101c] border ${isRunning ? 'border-emerald-500/10' : 'border-slate-900'} rounded p-4 font-mono flex flex-col justify-between hover:border-slate-800 transition`;
+                card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start gap-4">
+                            <div class="truncate">
+                                <h4 class="font-bold text-slate-100 flex items-center gap-2 text-xs">
+                                    <span class="w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-500' : 'bg-slate-600'}"></span>
+                                    ${c.name}
+                                </h4>
+                                <p class="text-[10px] text-slate-500 mt-0.5 truncate">${c.image}</p>
+                            </div>
+                            <span class="text-[9px] bg-[#070a12] px-1.5 py-0.5 rounded text-slate-500 border border-slate-900">${c.id}</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-3 text-[10px]">
+                            <span class="text-slate-600">STATUS:</span>
+                            <span class="${isRunning ? 'text-emerald-500 font-bold' : 'text-slate-500'}">${c.status.toUpperCase()}</span>
+                        </div>
+                    </div>
+                    ${isRunning ? `
+                    <div class="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-900">
+                        <div class="bg-[#070a12] p-1.5 rounded border border-slate-900">
+                            <div class="text-[9px] text-slate-500">CPU LOAD</div>
+                            <div class="text-xs font-bold text-emerald-400 mt-0.5">${c.cpu_pct}%</div>
+                        </div>
+                        <div class="bg-[#070a12] p-1.5 rounded border border-slate-900">
+                            <div class="text-[9px] text-slate-500">MEM LIMIT</div>
+                            <div class="text-xs font-bold text-slate-300 mt-0.5">${c.mem_pct}%</div>
+                        </div>
+                    </div>` : `
+                    <div class="mt-4 pt-3 border-t border-slate-900 text-center text-[10px] text-slate-600 italic">CONTAINER_OFFLINE</div>`}`;
+                containerGrid.appendChild(card);
+            });
+            document.getElementById('dockRunningCount').innerText = runningCount;
+            document.getElementById('dockTotalCount').innerText = (currentSrvData.docker || []).length;
+        }
+
+        function buildCronTable() {
+            const tbody = document.getElementById('cronTableBody');
+            tbody.innerHTML = '';
+            (currentSrvData.cron || []).forEach(job => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-900/40 transition duration-150 border-b border-slate-900';
+                tr.innerHTML = `
+                    <td class="px-5 py-3 text-emerald-400 font-bold font-mono">${job.schedule}</td>
+                    <td class="px-5 py-3 text-slate-400">${job.user}</td>
+                    <td class="px-5 py-3 text-slate-200 font-mono truncate max-w-xs" title="${job.command}">${job.command}</td>
+                    <td class="px-5 py-3 text-slate-500 text-right text-[10px] italic">${job.frequency || 'Manual entry'}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function buildNetworkView() {
+            const interfaceList = document.getElementById('interfaceList');
+            interfaceList.innerHTML = '';
+            (currentSrvData.networkInterfaces || []).forEach(nic => {
+                const div = document.createElement('div');
+                div.className = 'bg-[#070a12] p-3 border border-slate-900 rounded flex flex-col gap-1.5';
+                div.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold text-slate-200">${nic.name}</span>
+                        <span class="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 font-bold">UP</span>
+                    </div>
+                    <div class="text-[10px] text-slate-500">
+                        IP: <span class="text-slate-300 font-mono">${nic.ip}</span><br/>
+                        MAC: <span class="text-slate-400 font-mono">${nic.mac}</span>
+                    </div>
+                    <div class="flex justify-between text-[9px] text-slate-400 border-t border-slate-900/60 pt-2 mt-1">
+                        <span>RX: ${nic.rx}</span>
+                        <span>TX: ${nic.tx}</span>
+                    </div>`;
+                interfaceList.appendChild(div);
+            });
+
+            const socketsBody = document.getElementById('networkSocketsTableBody');
+            socketsBody.innerHTML = '';
+            (currentSrvData.listeningSockets || []).forEach(sock => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-900/40 transition duration-150 border-b border-slate-900';
+                tr.innerHTML = `
+                    <td class="px-4 py-2.5 text-slate-200 font-bold">${sock.port}</td>
+                    <td class="px-4 py-2.5 text-slate-400 font-mono">${sock.bind}</td>
+                    <td class="px-4 py-2.5 text-slate-500 text-[10px]">${sock.proto}</td>
+                    <td class="px-4 py-2.5 text-emerald-400 font-bold">${sock.process}</td>
+                    <td class="px-4 py-2.5 text-right"><span class="text-[10px] bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono">${sock.status}</span></td>`;
+                socketsBody.appendChild(tr);
+            });
+        }
+
+        function buildStorageView() {
+            const mountList = document.getElementById('mountList');
+            mountList.innerHTML = '';
+            (currentSrvData.partitions || []).forEach(m => {
+                const div = document.createElement('div');
+                div.className = 'bg-[#070a12] p-3 border border-slate-900 rounded';
+                div.innerHTML = `
+                    <div class="flex justify-between items-start mb-1.5">
+                        <div>
+                            <div class="text-xs font-bold text-slate-200">${m.mount}</div>
+                            <div class="text-[9px] text-slate-500 font-mono">${m.device}</div>
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-400">${m.use_pct}%</span>
+                    </div>
+                    <div class="w-full bg-[#111827] rounded-full h-1">
+                        <div class="bg-emerald-500 h-1 rounded-full" style="width: ${m.use_pct}%"></div>
+                    </div>
+                    <div class="flex justify-between text-[9px] text-slate-500 mt-1.5">
+                        <span>Used: ${m.used} GB</span>
+                        <span>Avail: ${m.free} GB</span>
+                    </div>`;
+                mountList.appendChild(div);
+            });
+
+            const storageBarContainer = document.getElementById('storageBarContainer');
+            storageBarContainer.innerHTML = '';
+            const sortedDirs = [...(currentSrvData.storage || [])].sort((a, b) => parseFloat(b.size) - parseFloat(a.size));
+            sortedDirs.forEach((dir, index) => {
+                const topSize = parseFloat(sortedDirs[0]?.size) || 1;
+                const currentSize = parseFloat(dir.size) || 0;
+                const relativePct = Math.max(10, Math.min(100, (currentSize / topSize) * 100));
+                const div = document.createElement('div');
+                div.className = 'bg-[#070a12] p-3 border border-slate-900 rounded flex flex-col gap-1.5 hover:border-slate-800 transition';
+                div.innerHTML = `
+                    <div class="flex justify-between items-center text-xs">
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-600 font-bold text-[9px]">0${index + 1}</span>
+                            <span class="text-slate-200 font-bold">${dir.directory}</span>
+                        </div>
+                        <span class="font-bold text-slate-100 bg-[#0c1220] px-2 py-0.5 rounded text-[10px] border border-slate-800">${dir.size}</span>
+                    </div>
+                    <div class="w-full bg-slate-900 rounded-full h-1">
+                        <div class="bg-emerald-500 h-1 rounded-full" style="width: ${relativePct}%"></div>
+                    </div>`;
+                storageBarContainer.appendChild(div);
+            });
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = 'tab-btn px-4 py-2.5 font-mono text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all duration-150 focus:outline-none flex items-center gap-2';
+            });
+            document.getElementById(`tabBtn-${tabId}`).className = 'tab-btn px-4 py-2.5 font-mono text-xs font-medium border-b-2 border-emerald-500 text-emerald-400 transition-all duration-150 focus:outline-none flex items-center gap-2';
+            if (tabId === 'system') buildProcessesTable();
+            if (tabId === 'docker') buildDockerGrid();
+            if (tabId === 'cron') buildCronTable();
+            if (tabId === 'network') buildNetworkView();
+            if (tabId === 'storage') buildStorageView();
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').innerText = message;
+            toast.classList.remove('opacity-0', 'translate-y-20', 'pointer-events-none');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-20', 'pointer-events-none');
+                toast.classList.remove('opacity-100', 'translate-y-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
