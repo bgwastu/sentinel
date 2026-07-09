@@ -76,12 +76,14 @@ app = FastAPI(title="Sentinel", description="Host monitoring dashboard", lifespa
 @app.get("/api/telemetry")
 def get_telemetry(
     search: str = Query("", description="Filter processes by name or user"),
-    sort: str = Query("cpu", description="Sort processes by cpu, mem, or pid"),
+    sort: str = Query("cpu", description="Sort processes by cpu, mem, pid, user, or name"),
+    sort_desc: bool = Query(True, description="Sort descending (false = ascending)"),
 ):
     host_data = host.collect_host_snapshot()
     process_tree, process_count = processes.collect_process_tree(
         search=search,
         sort_by=sort,
+        sort_desc=sort_desc,
     )
 
     payload = {

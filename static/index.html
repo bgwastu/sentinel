@@ -143,22 +143,17 @@
                         </div>
                         <div class="flex flex-wrap gap-2 w-full sm:w-auto items-center">
                             <input type="text" id="procSearch" placeholder="Filter apps..." class="px-3 py-1.5 bg-[#070a12] border border-slate-800 rounded font-mono text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50 placeholder-slate-600 w-full sm:w-48">
-                            <select id="procSort" class="px-2 py-1.5 bg-[#070a12] border border-slate-800 rounded font-mono text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50">
-                                <option value="cpu">Sort: CPU %</option>
-                                <option value="mem">Sort: RAM %</option>
-                                <option value="pid">Sort: PID</option>
-                            </select>
                         </div>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left font-mono text-xs">
                             <thead class="bg-[#070a12] text-slate-500 border-b border-slate-800 uppercase text-[10px] tracking-wider">
                                 <tr>
-                                    <th class="px-5 py-3">PID</th>
-                                    <th class="px-5 py-3">User</th>
-                                    <th class="px-5 py-3">Executable Name</th>
-                                    <th class="px-5 py-3 text-right">CPU Allocation</th>
-                                    <th class="px-5 py-3 text-right">Memory (RAM) %</th>
+                                    <th class="px-5 py-3 cursor-pointer hover:text-slate-300 select-none" onclick="sortProcesses('pid')">PID <span id="sortInd-pid" class="text-emerald-400"></span></th>
+                                    <th class="px-5 py-3 cursor-pointer hover:text-slate-300 select-none" onclick="sortProcesses('user')">User <span id="sortInd-user" class="text-emerald-400"></span></th>
+                                    <th class="px-5 py-3 cursor-pointer hover:text-slate-300 select-none" onclick="sortProcesses('name')">Executable Name <span id="sortInd-name" class="text-emerald-400"></span></th>
+                                    <th class="px-5 py-3 text-right cursor-pointer hover:text-slate-300 select-none" onclick="sortProcesses('cpu')">CPU Allocation <span id="sortInd-cpu" class="text-emerald-400"></span></th>
+                                    <th class="px-5 py-3 text-right cursor-pointer hover:text-slate-300 select-none" onclick="sortProcesses('mem')">Memory (RAM) % <span id="sortInd-mem" class="text-emerald-400"></span></th>
                                 </tr>
                             </thead>
                             <tbody id="processTableBody" class="divide-y divide-slate-900"></tbody>
@@ -287,6 +282,8 @@
         let livePollInterval = null;
         let wasDisconnected = false;
         let expandedPids = new Set();
+        let procSortField = 'cpu';
+        let procSortDesc = true;
         let cpuChartInstance, memChartInstance, diskChartInstance, netChartInstance;
         let cpuHistory = Array(15).fill(0);
         let memHistory = Array(15).fill(0);
@@ -296,6 +293,7 @@
 
         window.onload = function() {
             initSparklines();
+            updateSortIndicators();
             startTelemetryPolling();
             document.getElementById('publicIpBtn').addEventListener('click', copyPublicIp);
         };
@@ -376,8 +374,11 @@
 
         async function fetchTelemetry() {
             const searchVal = document.getElementById('procSearch').value;
-            const sortVal = document.getElementById('procSort').value;
-            const params = new URLSearchParams({ search: searchVal, sort: sortVal });
+            const params = new URLSearchParams({
+                search: searchVal,
+                sort: procSortField,
+                sort_desc: procSortDesc,
+            });
             try {
                 const res = await fetch(`/api/telemetry?${params}`);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -521,15 +522,38 @@
             return rows;
         }
 
+        function updateSortIndicators() {
+            ['pid', 'user', 'name', 'cpu', 'mem'].forEach(field => {
+                const el = document.getElementById(`sortInd-${field}`);
+                if (!el) return;
+                if (field === procSortField) {
+                    el.textContent = procSortDesc ? '↓' : '↑';
+                } else {
+                    el.textContent = '';
+                }
+            });
+        }
+
+        function sortProcesses(field) {
+            if (procSortField === field) {
+                procSortDesc = !procSortDesc;
+            } else {
+                procSortField = field;
+                procSortDesc = field !== 'pid';
+            }
+            updateSortIndicators();
+            fetchTelemetry();
+        }
+
         function buildProcessesTable() {
             const tbody = document.getElementById('processTableBody');
             const tree = currentSrvData.processTree || [];
             document.getElementById('procCount').innerText = currentSrvData.processCount ?? countTreeNodes(tree);
             tbody.innerHTML = renderProcessRows(tree).join('');
+            updateSortIndicators();
         }
 
         document.getElementById('procSearch').addEventListener('input', fetchTelemetry);
-        document.getElementById('procSort').addEventListener('change', fetchTelemetry);
 
         function buildDockerGrid() {
             const containerGrid = document.getElementById('dockerGrid');

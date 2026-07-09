@@ -50,17 +50,20 @@ def is_system_process(name: str) -> bool:
     return any(name.startswith(prefix) for prefix in SYSTEM_NAME_PREFIXES)
 
 
-def _sort_nodes(nodes: list[dict], sort_by: str) -> None:
+def _sort_nodes(nodes: list[dict], sort_by: str, reverse: bool = True) -> None:
     sort_key = {
         "cpu": lambda n: n["cpu"],
         "mem": lambda n: n["mem_pct"],
         "pid": lambda n: n["pid"],
+        "user": lambda n: n["user"].lower(),
+        "name": lambda n: n["name"].lower(),
     }.get(sort_by, lambda n: n["cpu"])
-    reverse = sort_by != "pid"
+    if sort_by == "pid":
+        reverse = not reverse
     nodes.sort(key=sort_key, reverse=reverse)
     for node in nodes:
         if node["children"]:
-            _sort_nodes(node["children"], sort_by)
+            _sort_nodes(node["children"], sort_by, reverse)
 
 
 def _matches_search(node: dict, needle: str) -> bool:
@@ -126,6 +129,7 @@ def _trim_tree(nodes: list[dict], max_nodes: int, max_depth: int, depth: int = 0
 def collect_process_tree(
     search: str = "",
     sort_by: str = "cpu",
+    sort_desc: bool = True,
 ) -> tuple[list[dict], int]:
     raw_nodes: dict[int, dict] = {}
     procs = list(psutil.process_iter(["pid", "ppid", "username", "name", "memory_percent"]))
@@ -171,21 +175,24 @@ def collect_process_tree(
             continue
 
     total_count = len(raw_nodes)
-    for pid, node in raw_nodes.items():
-        node["children"] = []
-    roots: list[dict] = []
-    for pid, node in raw_nodes.items():
-        ppid = node["ppid"]
-        if ppid in raw_nodes and ppid != pid:
-            raw_nodes[ppid]["children"].append(node)
-        else:
-            roots.append(node)
-
     needle = search.strip().lower()
-    if needle:
-        roots = _filter_tree(roots, needle)
 
-    _sort_nodes(roots, sort_by)
+    if needle:
+        for pid, node in raw_nodes.items():
+            node["children"] = []
+        roots: list[dict] = []
+        for pid, node in raw_nodes.items():
+            ppid = node["ppid"]
+            if ppid in raw_nodes and ppid != pid:
+                raw_nodes[ppid]["children"].append(node)
+            else:
+                roots.append(node)
+        roots = _filter_tree(roots, needle)
+    else:
+        visible = {pid for pid, node in raw_nodes.items() if not node["is_system"]}
+        roots = _reparent_visible(raw_nodes, visible)
+
+    _sort_nodes(roots, sort_by, sort_desc)
     roots = roots[:PROCESS_MAX_ROOTS]
     roots, _ = _trim_tree(roots, PROCESS_MAX_NODES, PROCESS_MAX_DEPTH)
     return roots, total_count
