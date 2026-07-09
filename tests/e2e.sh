@@ -14,12 +14,15 @@ import json, urllib.request
 data = json.load(urllib.request.urlopen("$BASE_URL/api/telemetry"))
 required = [
     "hostname", "uptime", "cores", "load", "cpu", "memory", "disk", "network",
-    "processes", "docker", "cron", "storage", "networkInterfaces", "listeningSockets", "history"
+    "processTree", "processCount", "publicIp", "processes", "docker", "cron",
+    "storage", "networkInterfaces", "listeningSockets", "history"
 ]
 missing = [k for k in required if k not in data]
 if missing:
     raise SystemExit(f"Missing keys: {missing}")
 assert isinstance(data["history"]["cpu"], list) and len(data["history"]["cpu"]) == 15
+assert isinstance(data["history"]["timestamps"], list) and len(data["history"]["timestamps"]) == 15
+assert isinstance(data["processTree"], list)
 print("schema ok")
 PY
 

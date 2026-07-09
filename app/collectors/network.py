@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
 import re
 import socket
 import struct
+import time
+import urllib.request
 from pathlib import Path
 
 import psutil
@@ -11,17 +14,11 @@ from app.utils import format_bytes, host_path
 
 TCP_STATES = {
     "01": "ESTABLISHED",
-    "02": "SYN_SENT",
-    "03": "SYN_RECV",
-    "04": "FIN_WAIT1",
-    "05": "FIN_WAIT2",
-    "06": "TIME_WAIT",
-    "07": "CLOSE",
-    "08": "CLOSE_WAIT",
-    "09": "LAST_ACK",
     "0A": "LISTEN",
-    "0B": "CLOSING",
 }
+
+PUBLIC_IP_CACHE_TTL = 3600
+_public_ip_cache: tuple[str | None, float] = (None, 0.0)
 
 
 def _hex_ip(hex_addr: str) -> str:
@@ -34,76 +31,167 @@ def _hex_ip(hex_addr: str) -> str:
         return hex_addr
 
 
-def _parse_proc_net(path: Path, proto: str) -> list[dict]:
+def _hex_ip6(hex_addr: str) -> str:
+    if len(hex_addr) != 32:
+        return hex_addr
+    try:
+        packed = bytes.fromhex(hex_addr)
+        return socket.inet_ntop(socket.AF_INET6, packed)
+    except (OSError, ValueError):
+        return hex_addr
+
+
+def _build_socket_inode_map() -> dict[str, tuple[int, str]]:
+    """Map socket inode string -> (pid, process name)."""
+    inode_map: dict[str, tuple[int, str]] = {}
+    proc_root = host_path("proc")
+    if not proc_root.exists():
+        proc_root = Path("/proc")
+
+    for pid_dir in proc_root.iterdir():
+        if not pid_dir.name.isdigit():
+            continue
+        pid = int(pid_dir.name)
+        try:
+            proc_name = psutil.Process(pid).name()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            proc_name = "unknown"
+
+        fd_dir = pid_dir / "fd"
+        if not fd_dir.is_dir():
+            continue
+        try:
+            for fd in fd_dir.iterdir():
+                try:
+                    target = os.readlink(fd)
+                except OSError:
+                    continue
+                match = re.match(r"socket:\[(\d+)\]", target)
+                if match:
+                    inode_map[match.group(1)] = (pid, proc_name)
+        except (OSError, PermissionError):
+            continue
+
+    return inode_map
+
+
+def _parse_proc_listen(path: Path, proto: str, inode_map: dict[str, tuple[int, str]], ipv6: bool = False) -> list[dict]:
     sockets: list[dict] = []
     if not path.exists():
         return sockets
-
-    inode_to_proc: dict[str, str] = {}
-    try:
-        for conn in psutil.net_connections(kind=proto.lower()):
-            if conn.status != psutil.CONN_LISTEN:
-                continue
-            if conn.laddr and conn.pid:
-                proc_name = "unknown"
-                try:
-                    proc_name = psutil.Process(conn.pid).name()
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-                sockets.append(
-                    {
-                        "port": conn.laddr.port,
-                        "bind": conn.laddr.ip,
-                        "proto": proto,
-                        "process": proc_name,
-                        "status": "LISTEN",
-                    }
-                )
-        return sorted(sockets, key=lambda s: s["port"])
-    except (psutil.AccessDenied, PermissionError):
-        pass
 
     try:
         for line in path.read_text(errors="ignore").splitlines()[1:]:
             parts = line.split()
             if len(parts) < 10:
                 continue
-            local = parts[1]
-            state = parts[3]
-            if state != "0A":
+            if parts[3] != "0A":
                 continue
-            ip_hex, port_hex = local.split(":")
+            local = parts[1]
+            if ":" not in local:
+                continue
+            ip_hex, port_hex = local.rsplit(":", 1)
             port = int(port_hex, 16)
-            bind = _hex_ip(ip_hex)
+            bind = _hex_ip6(ip_hex) if ipv6 else _hex_ip(ip_hex)
             inode = parts[9]
-            process = inode_to_proc.get(inode, "unknown")
+            pid, proc_name = inode_map.get(inode, (None, "unknown"))
+            if pid and proc_name == "unknown":
+                try:
+                    proc_name = psutil.Process(pid).name()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
             sockets.append(
                 {
                     "port": port,
                     "bind": bind,
                     "proto": proto,
-                    "process": process,
-                    "status": TCP_STATES.get(state, "LISTEN"),
+                    "process": proc_name,
+                    "status": "LISTEN",
                 }
             )
     except OSError:
         pass
 
-    return sorted(sockets, key=lambda s: s["port"])
+    return sockets
 
 
 def collect_listening_sockets() -> list[dict]:
-    tcp = _parse_proc_net(host_path("proc/net/tcp"), "TCP")
-    udp = _parse_proc_net(host_path("proc/net/udp"), "UDP")
+    inode_map = _build_socket_inode_map()
+    tcp4 = _parse_proc_listen(host_path("proc/net/tcp"), "TCP", inode_map, ipv6=False)
+    tcp6 = _parse_proc_listen(host_path("proc/net/tcp6"), "TCP", inode_map, ipv6=True)
+    udp4 = _parse_proc_listen(host_path("proc/net/udp"), "UDP", inode_map, ipv6=False)
+    udp6 = _parse_proc_listen(host_path("proc/net/udp6"), "UDP", inode_map, ipv6=True)
+
     seen: set[tuple] = set()
     merged: list[dict] = []
-    for sock in tcp + udp:
+    for sock in tcp4 + tcp6 + udp4 + udp6:
         key = (sock["port"], sock["bind"], sock["proto"])
         if key in seen:
             continue
         seen.add(key)
         merged.append(sock)
-    return merged
+
+    if not merged:
+        try:
+            for conn in psutil.net_connections(kind="inet"):
+                if conn.status != psutil.CONN_LISTEN or not conn.laddr:
+                    continue
+                proc_name = "unknown"
+                if conn.pid:
+                    try:
+                        proc_name = psutil.Process(conn.pid).name()
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+                merged.append(
+                    {
+                        "port": conn.laddr.port,
+                        "bind": conn.laddr.ip,
+                        "proto": "TCP" if conn.type == socket.SOCK_STREAM else "UDP",
+                        "process": proc_name,
+                        "status": "LISTEN",
+                    }
+                )
+        except (psutil.AccessDenied, PermissionError):
+            pass
+
+    return sorted(merged, key=lambda s: (s["port"], s["bind"]))
+
+
+def get_public_ip() -> str | None:
+    global _public_ip_cache
+    env_ip = os.environ.get("PUBLIC_IP", "").strip()
+    if env_ip:
+        return env_ip
+
+    cached_ip, cached_at = _public_ip_cache
+    if cached_ip and (time.time() - cached_at) < PUBLIC_IP_CACHE_TTL:
+        return cached_ip
+
+    try:
+        with urllib.request.urlopen("https://api.ipify.org?format=json", timeout=4) as resp:
+            import json
+
+            data = json.loads(resp.read().decode())
+            ip = data.get("ip")
+            if ip:
+                _public_ip_cache = (ip, time.time())
+                return ip
+    except Exception:
+        pass
+
+    for nic, addrs in psutil.net_if_addrs().items():
+        if nic.startswith(("lo", "docker", "br-", "veth")):
+            continue
+        for addr in addrs:
+            if addr.family != socket.AF_INET:
+                continue
+            ip = addr.address
+            if ip.startswith(("10.", "172.", "192.168.", "127.")):
+                continue
+            _public_ip_cache = (ip, time.time())
+            return ip
+
+    return cached_ip
 
 
 def collect_network_interfaces() -> list[dict]:

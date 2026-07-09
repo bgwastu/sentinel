@@ -35,6 +35,7 @@ async def _sparkline_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    metric_history.load()
     storage.ensure_storage_scan(force=True)
     task = asyncio.create_task(_sparkline_loop())
     yield
@@ -52,10 +53,14 @@ app = FastAPI(title="Sentinel", description="Host monitoring dashboard", lifespa
 def get_telemetry(
     search: str = Query("", description="Filter processes by name or user"),
     sort: str = Query("cpu", description="Sort processes by cpu, mem, or pid"),
+    show_system: bool = Query(False, description="Include system processes in tree"),
 ):
     host_data = host.collect_host_snapshot()
-    memory = host_data["memory"]
-    disk = host_data["disk"]
+    process_tree, process_count = processes.collect_process_tree(
+        search=search,
+        sort_by=sort,
+        show_system=show_system,
+    )
 
     payload = {
         "hostname": host_data["hostname"],
@@ -63,12 +68,15 @@ def get_telemetry(
         "cores": host_data["cores"],
         "load": host_data["load"],
         "cpu": host_data["cpu"],
-        "memory": memory,
-        "disk": disk,
+        "memory": host_data["memory"],
+        "disk": host_data["disk"],
         "network": {"rate": host_data["network"]["rate"]},
         "networkInterface": host_data["network"].get("interface", "eth0"),
         "kernel": host_data.get("kernel", "linux"),
+        "publicIp": network.get_public_ip(),
         "history": host_data["history"],
+        "processTree": process_tree,
+        "processCount": process_count,
         "processes": processes.collect_processes(search=search, sort_by=sort),
         "docker": docker_collector.collect_docker(),
         "cron": cron.collect_cron(),

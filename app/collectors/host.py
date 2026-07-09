@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+import json
 import os
 import platform
 import socket
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
 
 import psutil
 
-from app.config import HISTORY_SIZE, HOST_PREFIX
+from app.config import HISTORY_PATH, HISTORY_SIZE, HOST_PREFIX, SPARKLINE_INTERVAL
 from app.utils import format_bytes_per_sec, format_uptime, gb, host_path
+
+
+def _iso_timestamp(offset_seconds: float = 0.0) -> str:
+    ts = datetime.now(timezone.utc) - timedelta(seconds=offset_seconds)
+    return ts.strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
 @dataclass
@@ -21,20 +28,55 @@ class MetricHistory:
     memory: deque[float] = field(default_factory=lambda: deque(maxlen=HISTORY_SIZE))
     disk: deque[float] = field(default_factory=lambda: deque(maxlen=HISTORY_SIZE))
     network: deque[float] = field(default_factory=lambda: deque(maxlen=HISTORY_SIZE))
+    timestamps: deque[str] = field(default_factory=lambda: deque(maxlen=HISTORY_SIZE))
     lock: Lock = field(default_factory=Lock)
     _last_net: dict[str, tuple[int, int, float]] = field(default_factory=dict)
     _initialized: bool = False
+
+    def load(self) -> None:
+        if not HISTORY_PATH.exists():
+            return
+        try:
+            data = json.loads(HISTORY_PATH.read_text())
+            with self.lock:
+                for key in ("cpu", "memory", "disk", "network"):
+                    values = data.get(key, [])
+                    getattr(self, key).extend(values[-HISTORY_SIZE:])
+                self.timestamps.extend(data.get("timestamps", [])[-HISTORY_SIZE:])
+                if len(self.cpu) >= HISTORY_SIZE:
+                    self._initialized = True
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+    def _persist(self) -> None:
+        try:
+            HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "cpu": list(self.cpu),
+                "memory": list(self.memory),
+                "disk": list(self.disk),
+                "network": list(self.network),
+                "timestamps": list(self.timestamps),
+            }
+            tmp = HISTORY_PATH.with_suffix(".tmp")
+            tmp.write_text(json.dumps(payload))
+            tmp.replace(HISTORY_PATH)
+        except OSError:
+            pass
 
     def seed(self, cpu: float, mem_pct: float, disk_pct: float, net_rate: float) -> None:
         with self.lock:
             if self._initialized:
                 return
-            for _ in range(HISTORY_SIZE):
+            for i in range(HISTORY_SIZE):
+                offset = (HISTORY_SIZE - 1 - i) * SPARKLINE_INTERVAL
                 self.cpu.append(cpu)
                 self.memory.append(mem_pct)
                 self.disk.append(disk_pct)
                 self.network.append(net_rate)
+                self.timestamps.append(_iso_timestamp(offset))
             self._initialized = True
+            self._persist()
 
     def append(self, cpu: float, mem_pct: float, disk_pct: float, net_rate: float) -> None:
         with self.lock:
@@ -42,15 +84,35 @@ class MetricHistory:
             self.memory.append(mem_pct)
             self.disk.append(disk_pct)
             self.network.append(net_rate)
+            self.timestamps.append(_iso_timestamp())
+            self._persist()
 
-    def snapshot(self) -> dict[str, list[float]]:
+    def snapshot(self) -> dict[str, list]:
         with self.lock:
-            return {
-                "cpu": list(self.cpu),
-                "memory": list(self.memory),
-                "disk": list(self.disk),
-                "network": list(self.network),
-            }
+            cpu = list(self.cpu)
+            memory = list(self.memory)
+            disk = list(self.disk)
+            network = list(self.network)
+            timestamps = list(self.timestamps)
+
+        while len(cpu) < HISTORY_SIZE:
+            cpu.insert(0, cpu[0] if cpu else 0.0)
+        while len(memory) < HISTORY_SIZE:
+            memory.insert(0, memory[0] if memory else 0.0)
+        while len(disk) < HISTORY_SIZE:
+            disk.insert(0, disk[0] if disk else 0.0)
+        while len(network) < HISTORY_SIZE:
+            network.insert(0, network[0] if network else 0.0)
+        while len(timestamps) < HISTORY_SIZE:
+            timestamps.insert(0, timestamps[0] if timestamps else _iso_timestamp())
+
+        return {
+            "cpu": cpu[-HISTORY_SIZE:],
+            "memory": memory[-HISTORY_SIZE:],
+            "disk": disk[-HISTORY_SIZE:],
+            "network": network[-HISTORY_SIZE:],
+            "timestamps": timestamps[-HISTORY_SIZE:],
+        }
 
 
 history = MetricHistory()
@@ -110,8 +172,6 @@ def get_memory() -> dict[str, float]:
 
 
 def get_disk() -> dict[str, float]:
-    from pathlib import Path
-
     try:
         usage = psutil.disk_usage(_disk_usage_path())
         return {

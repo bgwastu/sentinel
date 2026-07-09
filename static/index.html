@@ -63,11 +63,10 @@
                     </div>
                 </div>
             </div>
-            <div class="flex items-center gap-6 text-xs font-mono text-slate-400">
-                <div class="hidden sm:block"><span class="text-slate-500">CPU:</span> <span id="tickerCpu" class="text-slate-300">--</span></div>
-                <div class="hidden sm:block"><span class="text-slate-500">RAM:</span> <span id="tickerMem" class="text-slate-300">--</span></div>
-                <div class="hidden md:block"><span class="text-slate-500">DISK:</span> <span id="tickerDisk" class="text-slate-300">--</span></div>
-            </div>
+            <button id="publicIpBtn" type="button" class="hidden sm:flex items-center gap-1.5 text-xs font-mono text-slate-300 hover:text-emerald-400 transition cursor-pointer" title="Click to copy public IP">
+                <span class="text-slate-500">IP:</span>
+                <span id="publicIpText">--</span>
+            </button>
         </div>
     </header>
 
@@ -79,7 +78,7 @@
                     SYSTEM & PROCESSES
                 </button>
                 <button onclick="switchTab('docker')" id="tabBtn-docker" class="tab-btn px-4 py-2.5 font-mono text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all duration-150 focus:outline-none flex items-center gap-2">
-                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M13.983 8.187h3.081V5.11h-3.081v3.077zm3.437 0h3.084V5.11h-3.084v3.077zm-3.437-3.434h3.081V1.677h-3.081v3.076zm0 6.871h3.081V8.547h-3.081v3.077zm-3.437-3.437h3.081V5.11H10.546v3.077zM10.546 4.75h3.081V1.677h-3.081v3.073zm-3.436 6.871h3.081V8.547H7.11v3.077zm0-3.437h3.081V5.11H7.11v3.077zM3.672 11.621h3.081V8.547H3.672v3.077zm19.982 1.341c-.131-.341-.366-.632-.676-.826a4.29 4.29 0 00-.776-.388c-.282-.103-.574-.18-.871-.23a9.6 9.6 0 00-1.026-.067h-.431c-.126 0-.251.003-.374.009v-.004a4.343 4.343 0 00-1.898.431c-.347.168-.673.385-.97.643-.377-.144-.768-.254-1.168-.328v-.006l-.161-.027c-.201-.035-.404-.063-.609-.082a17.29 17.29 0 00-1.579-.06H2.17c-.123 0-.244.015-.363.045a1.144 1.144 0 00-.918 1.13c-.004.167.027.333.09.488a4.913 4.913 0 001.764 2.378c.854.606 1.87 1.011 2.946 1.173a14.773 14.773 0 006.182-.249c.583-.179 1.155-.422 1.698-.727.429.351.905.645 1.417.876.549.255 1.127.447 1.724.57.854.175 1.723.256 2.593.243.687-.01 1.373-.082 2.046-.217l.088-.018a4.524 4.524 0 002.324-1.28c.343-.347.604-.767.761-1.229.141-.424.201-.87.177-1.314a4.423 4.423 0 00-.192-1.242z"/></svg>
+                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M4 10h2v2H4v-2zm3 0h2v2H7v-2zm3 0h2v2h-2v-2zm3 0h2v2h-2v-2zm-6-3h2v2H7V7zm3 0h2v2h-2V7zm8 4.5c-.4 1.2-1.4 2.2-2.6 2.6C14.2 14.8 12.1 15 10 15c-2.1 0-4.2-.2-6.4-.9C2.4 13.7 1.4 12.7 1 11.5 2.8 11.2 4.6 11 6.5 11H10c.3 0 .6 0 .9.1 1.5.2 2.9.7 4.1 1.4z"/></svg>
                     DOCKER
                 </button>
                 <button onclick="switchTab('cron')" id="tabBtn-cron" class="tab-btn px-4 py-2.5 font-mono text-xs font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all duration-150 focus:outline-none flex items-center gap-2">
@@ -142,7 +141,11 @@
                             <h3 class="text-xs font-bold uppercase text-slate-300">System Activity / Apps running</h3>
                             <p class="text-[10px] text-slate-500">Active Host Task Records: <span id="procCount">--</span></p>
                         </div>
-                        <div class="flex gap-2 w-full sm:w-auto">
+                        <div class="flex flex-wrap gap-2 w-full sm:w-auto items-center">
+                            <label class="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 cursor-pointer">
+                                <input type="checkbox" id="showSystemProcs" class="rounded border-slate-700 bg-[#070a12] text-emerald-500 focus:ring-emerald-500/30">
+                                Show system processes
+                            </label>
                             <input type="text" id="procSearch" placeholder="Filter apps..." class="px-3 py-1.5 bg-[#070a12] border border-slate-800 rounded font-mono text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50 placeholder-slate-600 w-full sm:w-48">
                             <select id="procSort" class="px-2 py-1.5 bg-[#070a12] border border-slate-800 rounded font-mono text-xs text-slate-200 focus:outline-none focus:border-emerald-500/50">
                                 <option value="cpu">Sort: CPU %</option>
@@ -216,7 +219,7 @@
                     <div class="bg-[#0b101c] border border-slate-800/80 rounded p-5 lg:col-span-2">
                         <div class="mb-4">
                             <h3 class="text-xs font-bold uppercase text-slate-300">Listening Sockets Matrix</h3>
-                            <p class="text-[10px] text-slate-500">Active port bindings configured on loopback & local interfaces</p>
+                            <p class="text-[10px] text-slate-500">Active port bindings on local interfaces. Outbound-only services (e.g. Telegram bots) won't appear here.</p>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left font-mono text-xs">
@@ -272,56 +275,88 @@
             memory: { total: 0, used: 0, free: 0 },
             disk: { total: 0, used: 0, free: 0 },
             network: { rate: '0 B/s' },
+            publicIp: null,
+            processTree: [],
+            processCount: 0,
             processes: [],
             docker: [],
             cron: [],
             storage: [],
             partitions: [],
             networkInterfaces: [],
-            listeningSockets: []
+            listeningSockets: [],
+            history: { cpu: [], memory: [], disk: [], network: [], timestamps: [] }
         };
 
         let livePollInterval = null;
+        let wasDisconnected = false;
+        let expandedPids = new Set();
         let cpuChartInstance, memChartInstance, diskChartInstance, netChartInstance;
         let cpuHistory = Array(15).fill(0);
         let memHistory = Array(15).fill(0);
         let diskHistory = Array(15).fill(0);
         let netHistory = Array(15).fill(0);
+        let historyTimestamps = Array(15).fill('');
 
         window.onload = function() {
             initSparklines();
             startTelemetryPolling();
-            showToast('Telemetry initialised');
+            if (!sessionStorage.getItem('sentinel_toast')) {
+                showToast('Telemetry initialised');
+                sessionStorage.setItem('sentinel_toast', '1');
+            }
+            document.getElementById('publicIpBtn').addEventListener('click', copyPublicIp);
         };
 
+        function copyPublicIp() {
+            const ip = currentSrvData.publicIp;
+            if (!ip) return;
+            navigator.clipboard.writeText(ip).then(() => showToast('IP copied'));
+        }
+
+        function sparklineTooltipOptions(suffix) {
+            return {
+                enabled: true,
+                displayColors: false,
+                callbacks: {
+                    title: (items) => {
+                        const idx = items[0]?.dataIndex ?? 0;
+                        return historyTimestamps[idx] || '';
+                    },
+                    label: (ctx) => `${ctx.parsed.y}${suffix}`,
+                },
+                bodyFont: { weight: 'bold' },
+            };
+        }
+
         function initSparklines() {
-            const chartOptions = {
+            const baseOptions = {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                interaction: { mode: 'index', intersect: false },
                 scales: { x: { display: false }, y: { display: false, min: 0 } },
-                elements: { point: { radius: 0 }, line: { tension: 0.1, borderWidth: 1.5 } }
+                elements: { point: { radius: 0, hitRadius: 8 }, line: { tension: 0.1, borderWidth: 1.5 } },
             };
 
             cpuChartInstance = new Chart(document.getElementById('cpuSparkline').getContext('2d'), {
                 type: 'line',
                 data: { labels: Array(15).fill(''), datasets: [{ data: cpuHistory, borderColor: '#f97316', fill: false }] },
-                options: chartOptions
+                options: { ...baseOptions, plugins: { legend: { display: false }, tooltip: sparklineTooltipOptions('%') } },
             });
             memChartInstance = new Chart(document.getElementById('memSparkline').getContext('2d'), {
                 type: 'line',
                 data: { labels: Array(15).fill(''), datasets: [{ data: memHistory, borderColor: '#3b82f6', fill: false }] },
-                options: chartOptions
+                options: { ...baseOptions, plugins: { legend: { display: false }, tooltip: sparklineTooltipOptions('%') } },
             });
             diskChartInstance = new Chart(document.getElementById('diskSparkline').getContext('2d'), {
                 type: 'line',
                 data: { labels: Array(15).fill(''), datasets: [{ data: diskHistory, borderColor: '#22c55e', fill: false }] },
-                options: chartOptions
+                options: { ...baseOptions, plugins: { legend: { display: false }, tooltip: sparklineTooltipOptions('%') } },
             });
             netChartInstance = new Chart(document.getElementById('netSparkline').getContext('2d'), {
                 type: 'line',
                 data: { labels: Array(15).fill(''), datasets: [{ data: netHistory, borderColor: '#06b6d4', fill: false }] },
-                options: chartOptions
+                options: { ...baseOptions, plugins: { legend: { display: false }, tooltip: sparklineTooltipOptions(' B/s') } },
             });
         }
 
@@ -334,21 +369,27 @@
         async function fetchTelemetry() {
             const searchVal = document.getElementById('procSearch').value;
             const sortVal = document.getElementById('procSort').value;
-            const params = new URLSearchParams({ search: searchVal, sort: sortVal });
+            const showSystem = document.getElementById('showSystemProcs').checked;
+            const params = new URLSearchParams({ search: searchVal, sort: sortVal, show_system: showSystem });
             try {
                 const res = await fetch(`/api/telemetry?${params}`);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 currentSrvData = await res.json();
                 updateSparklinesFromHistory(currentSrvData.history);
                 updateUI();
+                if (wasDisconnected) {
+                    showToast('Reconnected');
+                    wasDisconnected = false;
+                }
             } catch (err) {
                 console.error('Telemetry fetch failed:', err);
+                wasDisconnected = true;
             }
         }
 
-        function padHistory(arr, size = 15) {
+        function padHistory(arr, size = 15, fallback = 0) {
             const copy = (arr || []).slice(-size);
-            while (copy.length < size) copy.unshift(copy[0] || 0);
+            while (copy.length < size) copy.unshift(copy[0] ?? fallback);
             return copy;
         }
 
@@ -358,6 +399,7 @@
             memHistory = padHistory(hist.memory);
             diskHistory = padHistory(hist.disk);
             netHistory = padHistory(hist.network);
+            historyTimestamps = padHistory(hist.timestamps || [], 15, '');
 
             cpuChartInstance.data.datasets[0].data = cpuHistory;
             memChartInstance.data.datasets[0].data = memHistory;
@@ -374,6 +416,7 @@
             document.getElementById('hostTitle').innerText = currentSrvData.hostname;
             document.getElementById('metaUptime').innerText = `uptime: ${currentSrvData.uptime}`;
             document.getElementById('metaKernel').innerText = currentSrvData.kernel || 'linux';
+            document.getElementById('publicIpText').innerText = currentSrvData.publicIp || 'unavailable';
             updateUIOverviewOnly();
             buildProcessesTable();
             buildDockerGrid();
@@ -397,21 +440,18 @@
         function updateUIOverviewOnly() {
             document.getElementById('cpuValText').innerText = `${currentSrvData.cpu}%`;
             document.getElementById('cpuCoresText').innerText = `${currentSrvData.cores} cores — Load ${currentSrvData.load}`;
-            document.getElementById('tickerCpu').innerText = `${currentSrvData.cpu}%`;
 
             const memUsed = parseFloat(currentSrvData.memory.used).toFixed(1);
             const memTotal = parseFloat(currentSrvData.memory.total).toFixed(1);
             const memPct = memTotal > 0 ? ((memUsed / memTotal) * 100).toFixed(1) : '0.0';
             document.getElementById('memValText').innerText = `${memPct}%`;
             document.getElementById('memPctText').innerText = `${memUsed} GB / ${memTotal} GB`;
-            document.getElementById('tickerMem').innerText = `${memPct}%`;
 
             const diskUsed = currentSrvData.disk.used;
             const diskTotal = currentSrvData.disk.total;
             const diskPct = diskTotal > 0 ? ((diskUsed / diskTotal) * 100).toFixed(1) : '0.0';
             document.getElementById('diskValText').innerText = `${diskPct}%`;
             document.getElementById('diskPctText').innerText = `${diskUsed} GB / ${diskTotal} GB`;
-            document.getElementById('tickerDisk').innerText = `${diskPct}%`;
 
             document.getElementById('netValText').innerText = currentSrvData.network.rate;
             document.getElementById('netMetaText').innerText = currentSrvData.networkInterface || 'eth0';
@@ -419,26 +459,67 @@
             evaluateServerHealth(parseFloat(currentSrvData.cpu), parseFloat(memPct), parseFloat(diskPct));
         }
 
+        function countTreeNodes(nodes) {
+            let count = 0;
+            nodes.forEach(n => {
+                count += 1 + countTreeNodes(n.children || []);
+            });
+            return count;
+        }
+
+        function toggleProcessNode(pid) {
+            if (expandedPids.has(pid)) expandedPids.delete(pid);
+            else expandedPids.add(pid);
+            buildProcessesTable();
+        }
+
+        function renderProcessRows(nodes, depth = 0) {
+            const rows = [];
+            nodes.forEach(p => {
+                const hasChildren = (p.children || []).length > 0;
+                const expanded = expandedPids.has(p.pid);
+                const indent = depth * 16;
+                const toggleBtn = hasChildren
+                    ? `<button type="button" onclick="toggleProcessNode(${p.pid})" class="text-slate-500 hover:text-emerald-400 w-4 text-center">${expanded ? '▾' : '▸'}</button>`
+                    : '<span class="w-4 inline-block"></span>';
+                const systemBadge = p.is_system
+                    ? '<span class="ml-1 text-[9px] text-slate-600 border border-slate-800 px-1 rounded">sys</span>'
+                    : '';
+                rows.push(`
+                    <tr class="hover:bg-slate-900/40 transition duration-150 border-b border-slate-900">
+                        <td class="px-5 py-3 text-slate-500">${p.pid}</td>
+                        <td class="px-5 py-3 text-slate-400 font-semibold">${p.user}</td>
+                        <td class="px-5 py-3 text-slate-200">
+                            <div class="flex items-center gap-1" style="padding-left:${indent}px">
+                                ${toggleBtn}
+                                <span class="text-slate-600 font-bold">></span>
+                                <span title="${p.label || p.name}">${p.name}</span>
+                                ${systemBadge}
+                            </div>
+                        </td>
+                        <td class="px-5 py-3 text-right font-bold text-emerald-400">${p.cpu}%</td>
+                        <td class="px-5 py-3 text-right text-slate-400">${p.mem_pct}%</td>
+                    </tr>`);
+                if (hasChildren && expanded) {
+                    rows.push(...renderProcessRows(p.children, depth + 1));
+                }
+            });
+            return rows;
+        }
+
         function buildProcessesTable() {
             const tbody = document.getElementById('processTableBody');
-            tbody.innerHTML = '';
-            const procs = currentSrvData.processes || [];
-            document.getElementById('procCount').innerText = procs.length;
-            procs.forEach(p => {
-                const tr = document.createElement('tr');
-                tr.className = 'hover:bg-slate-900/40 transition duration-150 border-b border-slate-900';
-                tr.innerHTML = `
-                    <td class="px-5 py-3 text-slate-500">${p.pid}</td>
-                    <td class="px-5 py-3 text-slate-400 font-semibold">${p.user}</td>
-                    <td class="px-5 py-3 text-slate-200"><span class="text-slate-600 font-bold">></span> ${p.name}</td>
-                    <td class="px-5 py-3 text-right font-bold text-emerald-400">${p.cpu}%</td>
-                    <td class="px-5 py-3 text-right text-slate-400">${p.mem_pct}%</td>`;
-                tbody.appendChild(tr);
-            });
+            const tree = currentSrvData.processTree || [];
+            document.getElementById('procCount').innerText = currentSrvData.processCount ?? countTreeNodes(tree);
+            tbody.innerHTML = renderProcessRows(tree).join('');
         }
 
         document.getElementById('procSearch').addEventListener('input', fetchTelemetry);
         document.getElementById('procSort').addEventListener('change', fetchTelemetry);
+        document.getElementById('showSystemProcs').addEventListener('change', () => {
+            expandedPids.clear();
+            fetchTelemetry();
+        });
 
         function buildDockerGrid() {
             const containerGrid = document.getElementById('dockerGrid');
