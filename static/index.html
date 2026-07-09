@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sentinel - System Monitor</title>
+    <title>Sentinel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
@@ -420,8 +420,17 @@
             netChartInstance.update('none');
         }
 
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;');
+        }
+
         function updateUI() {
-            document.getElementById('hostTitle').innerText = currentSrvData.hostname;
+            const hostname = currentSrvData.hostname || 'Sentinel';
+            document.getElementById('hostTitle').innerText = hostname;
+            document.title = hostname === 'loading' ? 'Sentinel' : `${hostname} - Sentinel`;
             document.getElementById('metaUptime').innerText = `uptime: ${currentSrvData.uptime}`;
             document.getElementById('metaKernel').innerText = currentSrvData.kernel || 'linux';
             document.getElementById('publicIpText').innerText = currentSrvData.publicIp || 'unavailable';
@@ -490,14 +499,15 @@
                 const chevron = hasChildren
                     ? `<svg class="w-3 h-3 shrink-0 transition-transform duration-150 ${expanded ? 'rotate-90' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>`
                     : '<span class="w-3 h-3 shrink-0"></span>';
+                const exePath = escapeHtml(p.exe || p.name);
                 const nameCell = hasChildren
                     ? `<button type="button" onclick="toggleProcessNode(${p.pid})" class="flex items-center gap-1.5 min-w-0 text-left text-slate-200 hover:text-emerald-400 transition group">
                             ${chevron}
-                            <span class="truncate" title="${p.label || p.name}">${p.name}</span>
+                            <span class="truncate" title="${exePath}">${p.name}</span>
                        </button>`
                     : `<div class="flex items-center gap-1.5 min-w-0">
                             ${chevron}
-                            <span class="truncate text-slate-200" title="${p.label || p.name}">${p.name}</span>
+                            <span class="truncate text-slate-200" title="${exePath}">${p.name}</span>
                        </div>`;
                 const systemBadge = p.is_system
                     ? '<span class="ml-1 shrink-0 text-[9px] text-slate-600 border border-slate-800 px-1 rounded">sys</span>'

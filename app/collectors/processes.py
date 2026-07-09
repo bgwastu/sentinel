@@ -37,6 +37,13 @@ def _process_name(proc: psutil.Process) -> str:
         return "unknown"
 
 
+def _process_exe(proc: psutil.Process) -> str:
+    try:
+        return proc.exe() or ""
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        return ""
+
+
 def _process_label(proc: psutil.Process) -> str:
     return _process_name(proc)
 
@@ -71,7 +78,7 @@ def _sort_nodes(nodes: list[dict], sort_by: str, reverse: bool = True) -> None:
 
 
 def _matches_search(node: dict, needle: str) -> bool:
-    hay = f"{node['pid']} {node['name']} {node['label']} {node['user']}".lower()
+    hay = f"{node['pid']} {node['name']} {node['label']} {node['user']} {node.get('exe', '')}".lower()
     return needle in hay
 
 
@@ -172,6 +179,7 @@ def collect_process_tree(
                 "mem_pct": round(float(mem_pct or 0.0), 1),
                 "name": name,
                 "label": _process_label(proc),
+                "exe": _process_exe(proc),
                 "is_system": is_system_process(name),
                 "children": [],
             }
