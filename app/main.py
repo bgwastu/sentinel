@@ -30,6 +30,8 @@ def _flatten_process_tree(tree: list[dict], limit: int = 200) -> list[dict]:
                     "user": node["user"],
                     "cpu": node["cpu"],
                     "mem_pct": node["mem_pct"],
+                    "disk_read_bytes": node.get("disk_read_bytes", 0),
+                    "disk_write_bytes": node.get("disk_write_bytes", 0),
                     "name": node["name"],
                 }
             )
@@ -105,6 +107,7 @@ def get_telemetry(
         "docker": docker_collector.collect_docker(),
         "cron": cron.collect_cron(),
         "storage": storage.get_storage_directories(),
+        "storageStatus": storage.get_storage_status(),
         "partitions": storage.collect_partitions(),
         "networkInterfaces": network.collect_network_interfaces(),
         "listeningSockets": network.collect_listening_sockets(),

@@ -56,7 +56,18 @@ def _scan_directories() -> list[dict]:
             results.append((directory, size))
 
     results.sort(key=lambda item: item[1], reverse=True)
-    return [{"directory": d, "size": format_bytes(s)} for d, s in results]
+    return [_scan_entry(directory, size) for directory, size in results]
+
+
+def _scan_entry(directory: str, size: int) -> dict:
+    """Return a stable, numeric entry for the client-side squarified treemap."""
+    return {
+        "directory": directory,
+        "path": directory,
+        "size_bytes": size,
+        "size": format_bytes(size),
+    }
+
 
 
 def _scan_worker() -> None:
@@ -87,6 +98,15 @@ def get_storage_directories() -> list[dict]:
     ensure_storage_scan()
     with _cache_lock:
         return list(_storage_cache)
+
+def get_storage_status() -> dict:
+    """Expose scan progress so the UI can distinguish loading from empty."""
+    with _cache_lock:
+        return {
+            "loading": _scan_running,
+            "last_scan": _last_scan,
+            "has_data": bool(_storage_cache),
+        }
 
 
 def collect_partitions() -> list[dict]:

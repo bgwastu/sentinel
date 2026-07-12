@@ -33,15 +33,67 @@
         }
     </script>
     <style>
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: #090d16; }
-        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
-        ::-webkit-scrollbar-thumb:hover { background: #334155; }
-        .terminal-grid {
-            background-size: 20px 20px;
-            background-image: radial-gradient(circle, rgba(30, 41, 59, 0.15) 1px, transparent 1px);
+        /* Hallmark · macrostructure: Workbench · tone: technical · anchor hue: emerald */
+        :root {
+            --surface-0: #090d16;
+            --surface-1: #0b101c;
+            --surface-2: #0f1726;
+            --surface-inset: #070a12;
+            --ink-0: #f8fafc;
+            --ink-1: #cbd5e1;
+            --ink-2: #94a3b8;
+            --ink-3: #64748b;
+            --line: #1e293b;
+            --accent: #34d399;
+            --accent-strong: #10b981;
+            --space-sm: .5rem;
+            --space-md: 1rem;
+            --space-lg: 1.5rem;
+            --ease-out: cubic-bezier(.2,.8,.2,1);
         }
-    </style>
+        * { box-sizing: border-box; }
+        html, body { overflow-x: clip; }
+        body { background: var(--surface-0) !important; color: var(--ink-1) !important; transition: background .2s var(--ease-out), color .2s var(--ease-out); }
+        .terminal-grid { background-size: 24px 24px; background-image: radial-gradient(circle, rgba(100,116,139,.13) 1px, transparent 1px); }
+        #statusPing, #statusIndicator { width: .5rem !important; height: .5rem !important; min-width: .5rem; min-height: .5rem; aspect-ratio: 1 / 1; border-radius: 999px !important; }
+        #statusPing { transform-origin: center; }
+        .panel-surface { background: var(--surface-1); }
+        .eyebrow { color: var(--ink-3); font: 600 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; }
+        .icon-button { width: 2rem; height: 2rem; display: grid; place-items: center; border: 1px solid var(--line); border-radius: .5rem; color: var(--ink-2); font-size: 1.25rem; transition: color .15s, border-color .15s, transform .15s; }
+        .icon-button:hover { color: var(--accent); border-color: var(--accent); transform: translateY(-1px); }
+        .icon-button:focus-visible, .segmented-control button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .modal-backdrop { background: rgba(2,6,23,.72); backdrop-filter: blur(8px); }
+        .chart-frame { height: 260px; border: 1px solid var(--line); border-radius: .75rem; padding: 1rem; background: var(--surface-inset); }
+        .segmented-control { display: inline-flex; padding: .2rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--surface-inset); }
+        .segmented-control button { border-radius: .35rem; padding: .4rem .7rem; color: var(--ink-3); font: 600 10px ui-monospace, SFMono-Regular, Menlo, monospace; transition: color .15s, background .15s; }
+        .segmented-control button:hover { color: var(--ink-0); }
+        .segmented-control button.active { color: var(--surface-0); background: var(--accent); }
+        .process-row { cursor: pointer; }
+        .process-row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+        .treemap-tile { position: absolute; overflow: hidden; border: 2px solid var(--surface-1); border-radius: .45rem; padding: .55rem; color: #f8fafc; transition: filter .15s, transform .15s; }
+        .treemap-tile:hover { z-index: 2; filter: brightness(1.12); transform: scale(.99); }
+        .treemap-tile strong, .treemap-tile span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .treemap-tile strong { font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .treemap-tile span { margin-top: .2rem; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; opacity: .78; }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+        }
+        body.theme-light {
+            --surface-0: #f4f7f5; --surface-1: #ffffff; --surface-2: #eef3f0; --surface-inset: #f0f4f2;
+            --ink-0: #13201b; --ink-1: #31423a; --ink-2: #587064; --ink-3: #74877e; --line: #d9e3dd;
+            --accent: #0f9f6e; --accent-strong: #087f58;
+            color-scheme: light;
+        }
+        body.theme-light .terminal-grid { background-image: radial-gradient(circle, rgba(31,66,50,.13) 1px, transparent 1px); }
+        body.theme-light [class~="bg-[#090d16]"], body.theme-light [class~="bg-[#0c1220]"], body.theme-light [class~="bg-[#0b101c]"], body.theme-light [class~="bg-[#070a12]"] { background-color: var(--surface-1) !important; }
+        body.theme-light [class~="text-[#e2e8f0]"], body.theme-light [class~="text-slate-100"], body.theme-light [class~="text-slate-200"], body.theme-light [class~="text-slate-300"] { color: var(--ink-0) !important; }
+        body.theme-light [class~="text-slate-400"] { color: var(--ink-2) !important; }
+        body.theme-light [class~="text-slate-500"], body.theme-light [class~="text-slate-600"] { color: var(--ink-3) !important; }
+        body.theme-light [class*="border-slate-"] { border-color: var(--line) !important; }
+        body.theme-light [class*="divide-slate-"] > :not([hidden]) ~ :not([hidden]) { border-color: var(--line) !important; }
+        body.theme-light [class*="hover:bg-slate-"]:hover { background-color: var(--surface-2) !important; }
+        body.theme-light .modal-backdrop { background: rgba(15,30,23,.35); }
+</style>
 </head>
 <body class="bg-[#090d16] text-[#e2e8f0] min-h-screen font-sans flex flex-col selection:bg-slate-800 selection:text-white terminal-grid antialiased">
 
@@ -240,11 +292,16 @@
                         <div id="mountList" class="flex flex-col gap-3"></div>
                     </div>
                     <div class="bg-[#0b101c] border border-slate-800/80 rounded p-5 lg:col-span-2">
-                        <div class="mb-5">
-                            <h3 class="text-xs font-bold uppercase text-slate-300">Largest Directories On Host</h3>
-                            <p class="text-[10px] text-slate-500">Sorted from biggest to smallest contributors on root filesystem</p>
+                        <div class="mb-4 flex items-start justify-between gap-4">
+                            <div>
+                                <h3 class="text-xs font-bold uppercase text-slate-300">Disk footprint / Squarified treemap</h3>
+                                <p class="text-[10px] text-slate-500">Bruls-style layout · hover any tile for the full path</p>
+                            </div>
+                            <span id="storageScanStatus" class="text-[10px] font-mono text-emerald-400 whitespace-nowrap">waiting</span>
                         </div>
-                        <div id="storageBarContainer" class="flex flex-col gap-4"></div>
+                        <div id="storageTreemap" class="relative min-h-[360px] rounded border border-slate-900 bg-[#070a12] overflow-hidden" aria-live="polite">
+                            <div id="storageLoading" class="absolute inset-0 flex items-center justify-center text-xs text-slate-500 font-mono">Loading disk scan…</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -256,6 +313,49 @@
         <span id="toastMessage">Telemetry initialised</span>
     </div>
 
+
+    <div id="processModal" class="fixed inset-0 z-40 hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="processModalTitle">
+        <div class="absolute inset-0 modal-backdrop" onclick="closeProcessModal()"></div>
+        <section class="relative z-10 w-full max-w-5xl max-h-[92vh] overflow-y-auto panel-surface rounded-xl shadow-2xl border border-slate-800">
+            <div class="flex items-start justify-between gap-4 p-5 border-b border-slate-800">
+                <div>
+                    <p class="eyebrow">PROCESS TELEMETRY</p>
+                    <h2 id="processModalTitle" class="text-lg font-semibold text-slate-100 mt-1">Process details</h2>
+                    <p id="processModalMeta" class="text-[11px] text-slate-500 font-mono mt-1"></p>
+                </div>
+                <button type="button" onclick="closeProcessModal()" class="icon-button" aria-label="Close process details">×</button>
+            </div>
+            <div class="p-5 space-y-5">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <p class="text-xs text-slate-400">Live resource history</p>
+                    <div id="processRangeButtons" class="segmented-control" role="group" aria-label="Chart range">
+                        <button type="button" data-range="1h" onclick="setProcessRange('1h')">1h</button>
+                        <button type="button" data-range="6h" onclick="setProcessRange('6h')">6h</button>
+                        <button type="button" data-range="24h" onclick="setProcessRange('24h')">24h</button>
+                    </div>
+                </div>
+                <div class="chart-frame"><canvas id="processDetailChart"></canvas></div>
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-semibold text-slate-200">Largest related consumers</h3>
+                        <span id="processConsumerMetric" class="text-[10px] text-slate-500 font-mono">CPU + memory · live</span>
+                    </div>
+                    <div id="processConsumers" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2"></div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div id="cronLogModal" class="fixed inset-0 z-40 hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="cronLogTitle">
+        <div class="absolute inset-0 modal-backdrop" onclick="closeCronLog()"></div>
+        <section class="relative z-10 w-full max-w-3xl panel-surface rounded-xl shadow-2xl border border-slate-800">
+            <div class="flex items-start justify-between gap-4 p-5 border-b border-slate-800">
+                <div><p class="eyebrow">CRON RUN HISTORY</p><h2 id="cronLogTitle" class="text-lg font-semibold text-slate-100 mt-1">Recent runs</h2></div>
+                <button type="button" onclick="closeCronLog()" class="icon-button" aria-label="Close cron log">×</button>
+            </div>
+            <div id="cronLogContent" class="p-5 font-mono text-xs text-slate-400 space-y-2"></div>
+        </section>
+    </div>
     <script>
         let currentSrvData = {
             hostname: 'loading',
@@ -291,7 +391,21 @@
         let netHistory = Array(15).fill(0);
         let historyTimestamps = Array(15).fill(0);
 
+        let processHistory = new Map();
+        let activeProcess = null;
+        let processDetailChart = null;
+        let processRange = '1h';
+        let themeMediaQuery;
+
+        function applyDeviceTheme() {
+            themeMediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+            const syncTheme = () => document.body.classList.toggle('theme-light', themeMediaQuery.matches);
+            syncTheme();
+            themeMediaQuery.addEventListener?.('change', syncTheme);
+        }
+
         window.onload = function() {
+            applyDeviceTheme();
             initSparklines();
             updateSortIndicators();
             startTelemetryPolling();
@@ -330,6 +444,7 @@
         }
 
         function initSparklines() {
+            if (typeof Chart === 'undefined') return;
             const baseOptions = {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -384,6 +499,7 @@
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 currentSrvData = await res.json();
                 updateSparklinesFromHistory(currentSrvData.history);
+                updateActiveProcessHistory();
                 updateUI();
                 if (wasDisconnected) {
                     showToast('Reconnected');
@@ -408,6 +524,7 @@
             diskHistory = padHistory(hist.disk);
             netHistory = padHistory(hist.network);
             historyTimestamps = padHistory(hist.timestamps || [], 15, 0);
+            if (!cpuChartInstance) return;
 
             cpuChartInstance.data.datasets[0].data = cpuHistory;
             memChartInstance.data.datasets[0].data = memHistory;
@@ -425,6 +542,48 @@
                 .replace(/&/g, '&amp;')
                 .replace(/"/g, '&quot;')
                 .replace(/</g, '&lt;');
+        }
+
+        function findProcess(nodes, pid) {
+            for (const node of (nodes || [])) {
+                if (Number(node.pid) === Number(pid)) return node;
+                const child = findProcess(node.children, pid);
+                if (child) return child;
+            }
+            return null;
+        }
+
+        function flattenRelatedProcess(node) {
+            if (!node) return [];
+            return [node, ...(node.children || []).flatMap(flattenRelatedProcess)];
+        }
+
+        function updateActiveProcessHistory() {
+            if (!activeProcess) return;
+            const node = findProcess(currentSrvData.processTree, activeProcess.pid);
+            if (!node) return;
+            const entry = processHistory.get(activeProcess.pid) || { timestamps: [], cpu: [], mem: [], disk: [], lastRead: null, lastWrite: null };
+            const readBytes = Number(node.disk_read_bytes) || 0;
+            const writeBytes = Number(node.disk_write_bytes) || 0;
+            const seconds = entry.timestamps.length ? Math.max((Date.now() - entry.timestamps[entry.timestamps.length - 1]) / 1000, 0.001) : 2;
+            const previousTotal = (entry.lastRead ?? readBytes) + (entry.lastWrite ?? writeBytes);
+            const currentTotal = readBytes + writeBytes;
+            const diskRate = Math.max(0, (currentTotal - previousTotal) / seconds / 1048576);
+            entry.timestamps.push(Date.now());
+            entry.cpu.push(Number(node.cpu) || 0);
+            entry.mem.push(Number(node.mem_pct) || 0);
+            entry.disk.push(Number(diskRate.toFixed(2)));
+            entry.lastRead = readBytes;
+            entry.lastWrite = writeBytes;
+            const max = 43200;
+            entry.timestamps = entry.timestamps.slice(-max);
+            entry.cpu = entry.cpu.slice(-max);
+            entry.mem = entry.mem.slice(-max);
+            entry.disk = entry.disk.slice(-max);
+            processHistory.set(activeProcess.pid, entry);
+            if (!document.getElementById('processModal').classList.contains('hidden')) {
+                renderProcessModal();
+            }
         }
 
         function updateUI() {
@@ -501,7 +660,7 @@
                     : '<span class="w-3 h-3 shrink-0"></span>';
                 const exePath = escapeHtml(p.exe || p.name);
                 const nameCell = hasChildren
-                    ? `<button type="button" onclick="toggleProcessNode(${p.pid})" class="flex items-center gap-1.5 min-w-0 text-left text-slate-200 hover:text-emerald-400 transition group">
+                    ? `<button type="button" onclick="event.stopPropagation(); toggleProcessNode(${p.pid})" class="flex items-center gap-1.5 min-w-0 text-left text-slate-200 hover:text-emerald-400 transition group">
                             ${chevron}
                             <span class="truncate" title="${exePath}">${p.name}</span>
                        </button>`
@@ -513,7 +672,7 @@
                     ? '<span class="ml-1 shrink-0 text-[9px] text-slate-600 border border-slate-800 px-1 rounded">sys</span>'
                     : '';
                 rows.push(`
-                    <tr class="hover:bg-slate-900/40 transition duration-150 border-b border-slate-900">
+                    <tr class="process-row hover:bg-slate-900/40 transition duration-150 border-b border-slate-900" onclick="openProcessModal(${p.pid})">
                         <td class="px-5 py-3 text-slate-500">${p.pid}</td>
                         <td class="px-5 py-3 text-slate-400 font-semibold">${p.user}</td>
                         <td class="px-5 py-3">
@@ -561,6 +720,70 @@
             document.getElementById('procCount').innerText = currentSrvData.processCount ?? countTreeNodes(tree);
             tbody.innerHTML = renderProcessRows(tree).join('');
             updateSortIndicators();
+        }
+
+        function openProcessModal(pid) {
+            const node = findProcess(currentSrvData.processTree, pid);
+            if (!node) return;
+            activeProcess = { pid: node.pid };
+            if (!processHistory.has(node.pid)) {
+                processHistory.set(node.pid, { timestamps: [Date.now()], cpu: [Number(node.cpu) || 0], mem: [Number(node.mem_pct) || 0], disk: [0], lastRead: Number(node.disk_read_bytes) || 0, lastWrite: Number(node.disk_write_bytes) || 0 });
+            }
+            document.getElementById('processModal').classList.remove('hidden');
+            document.getElementById('processModal').classList.add('flex');
+            renderProcessModal();
+        }
+
+        function closeProcessModal() {
+            const modal = document.getElementById('processModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            activeProcess = null;
+        }
+
+        function setProcessRange(range) {
+            processRange = range;
+            document.querySelectorAll('#processRangeButtons button').forEach(button => button.classList.toggle('active', button.dataset.range === range));
+            renderProcessModal();
+        }
+
+        function renderProcessModal() {
+            if (!activeProcess) return;
+            const node = findProcess(currentSrvData.processTree, activeProcess.pid);
+            if (!node) return;
+            const history = processHistory.get(node.pid) || { timestamps: [], cpu: [], mem: [], disk: [] };
+            const maxPoints = { '1h': 1800, '6h': 10800, '24h': 43200 }[processRange] || 1800;
+            const start = Math.max(0, history.timestamps.length - maxPoints);
+            const labels = history.timestamps.slice(start).map(ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            const cpu = history.cpu.slice(start);
+            const mem = history.mem.slice(start);
+            const disk = (history.disk || []).slice(start);
+            document.getElementById('processModalTitle').textContent = node.name;
+            document.getElementById('processModalMeta').textContent = `PID ${node.pid} · ${node.user} · ${node.exe || 'executable path unavailable'}`;
+            document.getElementById('processConsumerMetric').textContent = 'CPU + memory live · disk I/O when available · network per-process unavailable';
+            document.querySelectorAll('#processRangeButtons button').forEach(button => button.classList.toggle('active', button.dataset.range === processRange));
+            if (typeof Chart !== 'undefined') {
+                if (processDetailChart) processDetailChart.destroy();
+                processDetailChart = new Chart(document.getElementById('processDetailChart').getContext('2d'), {
+                    type: 'line',
+                    data: { labels, datasets: [
+                        { label: 'CPU %', data: cpu, borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,.12)', fill: true, tension: .25, pointRadius: 0 },
+                        { label: 'Memory %', data: mem, borderColor: '#60a5fa', fill: false, tension: .25, pointRadius: 0 },
+                        { label: 'Disk MB/s', data: disk, borderColor: '#fbbf24', fill: false, tension: .25, pointRadius: 0 },
+                    ] },
+                    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 10, font: { size: 10 } } } },
+                        scales: { x: { ticks: { color: '#64748b', maxTicksLimit: 8 }, grid: { color: 'rgba(100,116,139,.12)' } },
+                            y: { beginAtZero: true, ticks: { color: '#64748b' }, grid: { color: 'rgba(100,116,139,.12)' } } } },
+                });
+            }
+            const consumers = flattenRelatedProcess(node).slice(1).sort((a, b) => ((Number(b.cpu) || 0) + (Number(b.mem_pct) || 0)) - ((Number(a.cpu) || 0) + (Number(a.mem_pct) || 0))).slice(0, 6);
+            const target = document.getElementById('processConsumers');
+            target.innerHTML = consumers.length ? consumers.map(child => `
+                <div class="border border-slate-800 rounded-lg p-3 bg-[#070a12]">
+                    <div class="flex items-center justify-between gap-2"><strong class="text-xs text-slate-200 truncate">${escapeHtml(child.name)}</strong><span class="text-[10px] text-slate-500">PID ${child.pid}</span></div>
+                    <div class="grid grid-cols-3 gap-2 mt-3 text-[10px] font-mono"><span><b class="block text-emerald-400">${child.cpu}%</b>CPU</span><span><b class="block text-blue-400">${child.mem_pct}%</b>MEM</span><span><b class="block text-amber-400">${((Number(child.disk_read_bytes || 0) + Number(child.disk_write_bytes || 0)) / 1048576).toFixed(1)} MB</b>I/O total</span></div>
+                </div>`).join('') : '<p class="text-xs text-slate-500">No child processes are currently attached.</p>';
         }
 
         document.getElementById('procSearch').addEventListener('input', fetchTelemetry);
@@ -614,14 +837,41 @@
             tbody.innerHTML = '';
             (currentSrvData.cron || []).forEach(job => {
                 const tr = document.createElement('tr');
-                tr.className = 'hover:bg-slate-900/40 transition duration-150 border-b border-slate-900';
+                tr.className = 'hover:bg-slate-900/40 transition duration-150 border-b border-slate-900 cursor-pointer';
                 tr.innerHTML = `
-                    <td class="px-5 py-3 text-emerald-400 font-bold font-mono">${job.schedule}</td>
-                    <td class="px-5 py-3 text-slate-400">${job.user}</td>
-                    <td class="px-5 py-3 text-slate-200 font-mono truncate max-w-xs" title="${job.command}">${job.command}</td>
-                    <td class="px-5 py-3 text-slate-500 text-right text-[10px] italic">${job.frequency || 'Manual entry'}</td>`;
-                tbody.appendChild(tr);
+                    <td class="px-5 py-3 text-emerald-400 font-bold font-mono">${escapeHtml(job.schedule)}</td>
+                    <td class="px-5 py-3 text-slate-400">${escapeHtml(job.user)}</td>
+                    <td class="px-5 py-3 text-slate-200 font-mono truncate max-w-xs" title="${escapeHtml(job.command)}">${escapeHtml(job.command)}</td>
+                    <td class="px-5 py-3 text-right"><button type="button" class="cron-expand text-[10px] text-slate-400 hover:text-emerald-400" aria-expanded="false">SHOW 3 RUNS <span>＋</span></button></td>`;
+                const detail = document.createElement('tr');
+                detail.className = 'hidden border-b border-slate-900';
+                const runs = (job.last_runs || []).slice(0, 3);
+                detail.innerHTML = `<td colspan="4" class="px-5 py-3 bg-[#070a12]"><div class="flex items-center justify-between gap-3 mb-2"><span class="text-[10px] uppercase tracking-wider text-slate-500">Recent runs · retained for 4 hours</span><button type="button" class="cron-log text-[10px] text-emerald-400 hover:text-emerald-300">OPEN LOG</button></div>${runs.length ? runs.map(run => `<div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-1.5 text-[11px]"><time class="text-slate-500 shrink-0">${formatLocalTime(run.timestamp)}</time><code class="text-slate-300 truncate">${escapeHtml(run.message)}</code></div>`).join('') : `<p class="text-[11px] text-slate-500">${job.log_available ? 'No matching run found in the last 4 hours.' : 'Host cron log is not mounted; recent runs unavailable.'}</p>`}</td>`;
+                tr.addEventListener('click', () => {
+                    const isHidden = detail.classList.toggle('hidden');
+                    tr.querySelector('.cron-expand').setAttribute('aria-expanded', String(!isHidden));
+                    tr.querySelector('.cron-expand').innerHTML = `${isHidden ? 'SHOW' : 'HIDE'} 3 RUNS <span>${isHidden ? '＋' : '−'}</span>`;
+                });
+                detail.querySelector('.cron-log').addEventListener('click', event => { event.stopPropagation(); openCronLog(job); });
+                tbody.append(tr, detail);
             });
+        }
+
+        function openCronLog(job) {
+            document.getElementById('cronLogTitle').textContent = `${job.user} · ${job.command}`;
+            const runs = (job.last_runs || []).slice(0, 3);
+            document.getElementById('cronLogContent').innerHTML = runs.length
+                ? runs.map(run => `<div class="rounded border border-slate-800 bg-[#070a12] p-3"><time class="block text-emerald-400 mb-1">${formatLocalTime(run.timestamp)}</time><code class="whitespace-pre-wrap break-words text-slate-300">${escapeHtml(run.message)}</code></div>`).join('')
+                : `<p>${job.log_available ? 'No matching log lines in the last 4 hours.' : 'Cron logs are unavailable because the host log file is not mounted.'}</p>`;
+            const modal = document.getElementById('cronLogModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeCronLog() {
+            const modal = document.getElementById('cronLogModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
         }
 
         function buildNetworkView() {
@@ -685,27 +935,80 @@
                 mountList.appendChild(div);
             });
 
-            const storageBarContainer = document.getElementById('storageBarContainer');
-            storageBarContainer.innerHTML = '';
-            const sortedDirs = [...(currentSrvData.storage || [])].sort((a, b) => parseFloat(b.size) - parseFloat(a.size));
-            sortedDirs.forEach((dir, index) => {
-                const topSize = parseFloat(sortedDirs[0]?.size) || 1;
-                const currentSize = parseFloat(dir.size) || 0;
-                const relativePct = Math.max(10, Math.min(100, (currentSize / topSize) * 100));
-                const div = document.createElement('div');
-                div.className = 'bg-[#070a12] p-3 border border-slate-900 rounded flex flex-col gap-1.5 hover:border-slate-800 transition';
-                div.innerHTML = `
-                    <div class="flex justify-between items-center text-xs">
-                        <div class="flex items-center gap-2">
-                            <span class="text-slate-600 font-bold text-[9px]">0${index + 1}</span>
-                            <span class="text-slate-200 font-bold">${dir.directory}</span>
-                        </div>
-                        <span class="font-bold text-slate-100 bg-[#0c1220] px-2 py-0.5 rounded text-[10px] border border-slate-800">${dir.size}</span>
-                    </div>
-                    <div class="w-full bg-slate-900 rounded-full h-1">
-                        <div class="bg-emerald-500 h-1 rounded-full" style="width: ${relativePct}%"></div>
-                    </div>`;
-                storageBarContainer.appendChild(div);
+            const storageStatus = currentSrvData.storageStatus || {};
+            const scanStatus = document.getElementById('storageScanStatus');
+            const loading = document.getElementById('storageLoading');
+            scanStatus.textContent = storageStatus.loading ? 'scanning live…' : storageStatus.has_data ? 'updated live' : 'waiting for scan';
+            loading.textContent = storageStatus.loading ? 'Scanning directories…' : storageStatus.has_data ? '' : 'No readable directories found';
+            loading.classList.toggle('hidden', Boolean(storageStatus.has_data));
+            renderSquarifiedTreemap(currentSrvData.storage || []);
+        }
+
+        function treemapWorst(row, side) {
+            if (!row.length) return Infinity;
+            const sum = row.reduce((total, item) => total + item.area, 0);
+            const max = Math.max(...row.map(item => item.area));
+            const min = Math.min(...row.map(item => item.area));
+            return Math.max((side * side * max) / (sum * sum), (sum * sum) / (side * side * min));
+        }
+
+        function layoutTreemapRow(row, box) {
+            const sum = row.reduce((total, item) => total + item.area, 0);
+            const horizontal = box.w >= box.h;
+            const side = horizontal ? box.w : box.h;
+            const thickness = sum / side;
+            let cursor = horizontal ? box.x : box.y;
+            row.forEach(item => {
+                const length = item.area / thickness;
+                item.x = horizontal ? cursor : box.x;
+                item.y = horizontal ? box.y : cursor;
+                item.w = horizontal ? length : thickness;
+                item.h = horizontal ? thickness : length;
+                cursor += length;
+            });
+            if (horizontal) return { x: box.x, y: box.y + thickness, w: box.w, h: Math.max(0, box.h - thickness) };
+            return { x: box.x + thickness, y: box.y, w: Math.max(0, box.w - thickness), h: box.h };
+        }
+
+        function squarify(items) {
+            const ordered = [...items].sort((a, b) => b.value - a.value);
+            const total = ordered.reduce((sum, item) => sum + item.value, 0) || 1;
+            ordered.forEach(item => item.area = item.value / total * 10000);
+            const placed = [];
+            let remaining = { x: 0, y: 0, w: 100, h: 100 };
+            let row = [];
+            while (ordered.length) {
+                const next = ordered[0];
+                const side = Math.min(remaining.w, remaining.h);
+                if (!row.length || treemapWorst([...row, next], side) <= treemapWorst(row, side)) {
+                    row.push(ordered.shift());
+                } else {
+                    remaining = layoutTreemapRow(row, remaining);
+                    placed.push(...row);
+                    row = [];
+                }
+            }
+            if (row.length) placed.push(...row), layoutTreemapRow(row, remaining);
+            return placed;
+        }
+
+        function renderSquarifiedTreemap(entries) {
+            const container = document.getElementById('storageTreemap');
+            [...container.querySelectorAll('.treemap-tile')].forEach(tile => tile.remove());
+            const items = entries.map(entry => ({ ...entry, value: Number(entry.size_bytes) || 0 })).filter(item => item.value > 0);
+            if (!items.length) return;
+            const colors = ['#0f766e', '#0e7490', '#2563eb', '#7c3aed', '#be185d', '#c2410c', '#4d7c0f'];
+            squarify(items).forEach((item, index) => {
+                const tile = document.createElement('div');
+                tile.className = 'treemap-tile';
+                tile.style.left = `${item.x}%`;
+                tile.style.top = `${item.y}%`;
+                tile.style.width = `${Math.max(item.w, 2)}%`;
+                tile.style.height = `${Math.max(item.h, 2)}%`;
+                tile.style.background = colors[index % colors.length];
+                tile.title = `${item.path || item.directory} · ${item.size}`;
+                tile.innerHTML = `<strong>${escapeHtml(item.directory || item.path)}</strong><span>${escapeHtml(item.size)} · full path: ${escapeHtml(item.path || item.directory)}</span>`;
+                container.appendChild(tile);
             });
         }
 
@@ -733,6 +1036,19 @@
                 toast.classList.remove('opacity-100', 'translate-y-0');
             }, 3000);
         }
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                closeProcessModal();
+                closeCronLog();
+            }
+        });
+        window.openProcessModal = openProcessModal;
+        window.closeProcessModal = closeProcessModal;
+        window.setProcessRange = setProcessRange;
+        window.closeCronLog = closeCronLog;
+        window.switchTab = switchTab;
+        window.toggleProcessNode = toggleProcessNode;
+        window.openCronLog = openCronLog;
     </script>
 </body>
 </html>

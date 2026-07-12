@@ -171,12 +171,22 @@ def collect_process_tree(
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     ppid = 0
 
+            io_read = 0
+            io_write = 0
+            try:
+                io = proc.io_counters()
+                io_read = int(getattr(io, "read_bytes", 0) or 0)
+                io_write = int(getattr(io, "write_bytes", 0) or 0)
+            except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError):
+                pass
             raw_nodes[proc.pid] = {
                 "pid": proc.pid,
                 "ppid": ppid,
                 "user": user,
                 "cpu": round(float(cpu or 0.0), 1),
                 "mem_pct": round(float(mem_pct or 0.0), 1),
+                "disk_read_bytes": io_read,
+                "disk_write_bytes": io_write,
                 "name": name,
                 "label": _process_label(proc),
                 "exe": _process_exe(proc),
