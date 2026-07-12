@@ -48,15 +48,46 @@ def _dir_size(path: Path, max_depth: int = 3) -> int:
 
 
 def _scan_directories() -> list[dict]:
-    results: list[tuple[str, int]] = []
+    results: list[dict] = []
     for directory in SCAN_DIRECTORIES:
         path = host_path(directory.lstrip("/"))
-        size = _dir_size(path)
-        if size > 0:
-            results.append((directory, size))
+        if not path.exists() or not path.is_dir():
+            continue
+        entry = _scan_tree(path, directory, 0)
+        if entry["size_bytes"] > 0:
+            results.append(entry)
+    results.sort(key=lambda item: item["size_bytes"], reverse=True)
+    return results
 
-    results.sort(key=lambda item: item[1], reverse=True)
-    return [_scan_entry(directory, size) for directory, size in results]
+
+def _scan_tree(path: Path, display_path: str, depth: int) -> dict:
+    size = _dir_size(path, max_depth=max(1, 3 - depth))
+    entry = _scan_entry(display_path, size)
+    if depth >= 2:
+        return entry
+    children: list[dict] = []
+    try:
+        candidates = []
+        for child in path.iterdir():
+            if child.is_symlink():
+                continue
+            try:
+                child_size = _dir_size(child, max_depth=1) if child.is_dir() else child.stat().st_size
+            except OSError:
+                continue
+            if child_size > 0:
+                candidates.append((child, child_size))
+        candidates.sort(key=lambda item: item[1], reverse=True)
+        for child, child_size in candidates[:24]:
+            if child.is_dir():
+                children.append(_scan_tree(child, f"{display_path}/{child.name}", depth + 1))
+            else:
+                children.append(_scan_entry(f"{display_path}/{child.name}", child_size))
+    except OSError:
+        pass
+    if children:
+        entry["children"] = children
+    return entry
 
 
 def _scan_entry(directory: str, size: int) -> dict:

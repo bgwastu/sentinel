@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import datetime as _datetime
-import time
 
 import re
 from pathlib import Path
@@ -100,58 +98,6 @@ def _read_file(path: Path, default_user: str = "root") -> list[dict]:
         pass
     return jobs
 
-def _recent_log_lines() -> list[str]:
-    """Read host cron logs without executing job commands.
-
-    Syslog/journald access varies by image; an empty list is an honest
-    unavailable state rather than fabricated run history.
-    """
-    lines: list[str] = []
-    for relative in ("var/log/cron", "var/log/cron.log", "var/log/syslog"):
-        path = host_path(relative)
-        try:
-            if path.exists() and path.is_file():
-                lines.extend(path.read_text(errors="ignore").splitlines()[-500:])
-        except OSError:
-            continue
-    return lines
-
-
-def _job_history(command: str, lines: list[str]) -> list[dict]:
-    now = time.time()
-    token = command.strip().split()[0].rsplit("/", 1)[-1] if command.strip() else ""
-    if not token:
-        return []
-    runs: list[dict] = []
-    timestamp_pattern = re.compile(r"([A-Z][a-z]{2}\s+\d{1,2}\s+\d\d:\d\d:\d\d)")
-    for line in reversed(lines):
-        if token not in line and command[:48] not in line:
-            continue
-        stamp = timestamp_pattern.search(line)
-        if not stamp:
-            continue
-        try:
-            parsed = _datetime.datetime.strptime(
-                f"{_datetime.datetime.now().year} {stamp.group(1)}",
-                "%Y %b %d %H:%M:%S",
-            ).timestamp()
-        except ValueError:
-            continue
-        if now - parsed > 4 * 60 * 60 or parsed > now + 60:
-            continue
-        runs.append({"timestamp": parsed, "message": line.strip()})
-        if len(runs) == 3:
-            break
-    return runs
-
-
-def _attach_history(jobs: list[dict]) -> list[dict]:
-    lines = _recent_log_lines()
-    for job in jobs:
-        history = _job_history(job["command"], lines)
-        job["last_runs"] = history
-        job["log_available"] = bool(lines)
-    return jobs
 
 
 def collect_cron() -> list[dict]:
@@ -215,4 +161,4 @@ def collect_cron() -> list[dict]:
                 except OSError:
                     continue
 
-    return _attach_history(jobs)
+    return jobs
