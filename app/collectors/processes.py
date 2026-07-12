@@ -13,7 +13,7 @@ from app.config import (
 
 def _is_kernel_thread(proc: psutil.Process) -> bool:
     try:
-        if proc.pid <= 2:
+        if proc.pid == 2:
             return True
         if proc.ppid() == 2:
             return True

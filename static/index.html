@@ -70,6 +70,8 @@
         .segmented-control button.active { color: var(--surface-0); background: var(--accent); }
         .process-row { cursor: pointer; }
         .process-row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+        .treemap-panel { display: flex; flex-direction: column; min-height: 560px; height: 100%; }
+        .treemap-panel #storageTreemap { flex: 1 1 auto; min-height: 500px; height: auto; }
         .treemap-tile { position: absolute; overflow: hidden; border: 2px solid var(--surface-1); border-radius: .45rem; padding: .55rem; color: #f8fafc; transition: filter .15s, transform .15s; }
         .treemap-tile:hover { z-index: 2; filter: brightness(1.12); transform: scale(.99); }
         .treemap-tile strong, .treemap-tile span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -291,7 +293,7 @@
                         </div>
                         <div id="mountList" class="flex flex-col gap-3"></div>
                     </div>
-                    <div class="bg-[#0b101c] border border-slate-800/80 rounded p-5 lg:col-span-2">
+                    <div class="treemap-panel bg-[#0b101c] border border-slate-800/80 rounded p-5 lg:col-span-2">
                         <div class="mb-4 flex items-start justify-between gap-4">
                             <div>
                                 <h3 class="text-xs font-bold uppercase text-slate-300">Disk footprint / Squarified treemap</h3>
