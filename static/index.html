@@ -59,14 +59,17 @@
         #statusPing { transform-origin: center; }
         .process-row { cursor: default; }
         .process-row:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
-        .treemap-panel { display: flex; flex-direction: column; min-height: 560px; height: 100%; }
-        .treemap-panel #storageTreemap { flex: 1 1 auto; min-height: 500px; height: auto; }
-        .command-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
-        .treemap-tile { position: absolute; overflow: hidden; border: 2px solid var(--surface-1); border-radius: .45rem; padding: .55rem; color: #f8fafc; transition: filter .15s, transform .15s; }
-        .treemap-tile:hover { z-index: 2; filter: brightness(1.12); transform: scale(.99); }
-        .treemap-tile strong, .treemap-tile span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .treemap-tile strong { font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
-        .treemap-tile span { margin-top: .2rem; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; opacity: .78; }
+        .disk-insights-panel { min-height: 560px; }
+        .disk-summary-card { background: var(--surface-inset); border: 1px solid var(--line); border-radius: .55rem; padding: .85rem; }
+        .disk-summary-card strong { display: block; color: var(--ink-0); font: 700 15px ui-monospace, SFMono-Regular, Menlo, monospace; margin-top: .35rem; }
+        .disk-summary-card span { color: var(--ink-3); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; letter-spacing: .08em; }
+        .storage-rank { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; padding: .8rem .85rem; border-bottom: 1px solid var(--line); }
+        .storage-rank:last-child { border-bottom: 0; }
+        .storage-rank-path { min-width: 0; color: var(--ink-1); font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+        .storage-rank-meta { color: var(--ink-3); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; margin-top: .25rem; }
+        .storage-rank-bar { height: .35rem; margin-top: .55rem; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+        .storage-rank-fill { height: 100%; border-radius: inherit; background: var(--accent); transform-origin: left; }
+        .storage-rank-size { color: var(--accent-strong); font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
         }
@@ -283,16 +286,17 @@
                         </div>
                         <div id="mountList" class="flex flex-col gap-3"></div>
                     </div>
-                    <div class="treemap-panel bg-[#0b101c] border border-slate-800/80 rounded p-5 lg:col-span-2">
+                    <div class="disk-insights-panel bg-[#0b101c] border border-slate-800/80 rounded p-5 lg:col-span-2">
                         <div class="mb-4 flex items-start justify-between gap-4">
                             <div>
-                                <h3 class="text-xs font-bold uppercase text-slate-300">Disk footprint / Squarified treemap</h3>
-                                <p class="text-[10px] text-slate-500">Bruls-style layout · hover any tile for the full path</p>
+                                <h3 class="text-xs font-bold uppercase text-slate-300">Disk footprint / largest consumers</h3>
+                                <p class="text-[10px] text-slate-500">Ranked paths with proportional usage bars · updated from the live scan</p>
                             </div>
                             <span id="storageScanStatus" class="text-[10px] font-mono text-emerald-400 whitespace-nowrap">waiting</span>
                         </div>
-                        <div id="storageTreemap" class="relative min-h-[360px] rounded border border-slate-900 bg-[#070a12] overflow-hidden" aria-live="polite">
-                            <div id="storageLoading" class="absolute inset-0 flex items-center justify-center text-xs text-slate-500 font-mono">Loading disk scan…</div>
+                        <div id="storageSummaryCards" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4"></div>
+                        <div id="storageRankedList" class="rounded border border-slate-900 bg-[#070a12] overflow-hidden" aria-live="polite">
+                            <div id="storageLoading" class="p-8 text-center text-xs text-slate-500 font-mono">Loading disk scan…</div>
                         </div>
                     </div>
                 </div>
@@ -728,6 +732,15 @@
             });
         }
 
+        function flattenStorage(entries, depth = 0, output = []) {
+            (entries || []).forEach(entry => {
+                const children = entry.children || [];
+                if (!children.length) output.push({ ...entry, depth });
+                flattenStorage(children, depth + 1, output);
+            });
+            return output;
+        }
+
         function buildStorageView() {
             const mountList = document.getElementById('mountList');
             mountList.innerHTML = '';
@@ -755,102 +768,50 @@
             const storageStatus = currentSrvData.storageStatus || {};
             const scanStatus = document.getElementById('storageScanStatus');
             const loading = document.getElementById('storageLoading');
+            const summary = document.getElementById('storageSummaryCards');
+            const rankedList = document.getElementById('storageRankedList');
             scanStatus.textContent = storageStatus.loading ? 'scanning live…' : storageStatus.has_data ? 'updated live' : 'waiting for scan';
-            loading.textContent = storageStatus.loading ? 'Scanning directories…' : storageStatus.has_data ? '' : 'No readable directories found';
-            loading.classList.toggle('hidden', Boolean(storageStatus.has_data));
-            renderSquarifiedTreemap(currentSrvData.storage || []);
-        }
-
-        function treemapWorst(row, side) {
-            if (!row.length) return Infinity;
-            const sum = row.reduce((total, item) => total + item.area, 0);
-            const max = Math.max(...row.map(item => item.area));
-            const min = Math.min(...row.map(item => item.area));
-            return Math.max((side * side * max) / (sum * sum), (sum * sum) / (side * side * min));
-        }
-
-        function layoutTreemapRow(row, box) {
-            const sum = row.reduce((total, item) => total + item.area, 0);
-            const horizontal = box.w >= box.h;
-            const side = horizontal ? box.w : box.h;
-            const thickness = sum / side;
-            let cursor = horizontal ? box.x : box.y;
-            row.forEach(item => {
-                const length = item.area / thickness;
-                item.x = horizontal ? cursor : box.x;
-                item.y = horizontal ? box.y : cursor;
-                item.w = horizontal ? length : thickness;
-                item.h = horizontal ? thickness : length;
-                cursor += length;
-            });
-            if (horizontal) return { x: box.x, y: box.y + thickness, w: box.w, h: Math.max(0, box.h - thickness) };
-            return { x: box.x + thickness, y: box.y, w: Math.max(0, box.w - thickness), h: box.h };
-        }
-
-        function squarify(items) {
-            const ordered = [...items].sort((a, b) => b.value - a.value);
-            const total = ordered.reduce((sum, item) => sum + item.value, 0) || 1;
-            ordered.forEach(item => item.area = item.value / total * 10000);
-            const placed = [];
-            let remaining = { x: 0, y: 0, w: 100, h: 100 };
-            let row = [];
-            while (ordered.length) {
-                const next = ordered[0];
-                const side = Math.min(remaining.w, remaining.h);
-                if (!row.length || treemapWorst([...row, next], side) <= treemapWorst(row, side)) {
-                    row.push(ordered.shift());
-                } else {
-                    remaining = layoutTreemapRow(row, remaining);
-                    placed.push(...row);
-                    row = [];
-                }
+            if (storageStatus.loading || !storageStatus.has_data) {
+                loading.textContent = storageStatus.loading ? 'Scanning directories…' : 'No readable directories found';
+                loading.classList.remove('hidden');
+                summary.innerHTML = '';
+                rankedList.querySelectorAll('.storage-rank').forEach(row => row.remove());
+                return;
             }
-            if (row.length) placed.push(...row), layoutTreemapRow(row, remaining);
-            return placed;
+            loading.classList.add('hidden');
+
+            const roots = currentSrvData.storage || [];
+            const leaves = flattenStorage(roots).filter(item => Number(item.size_bytes) > 0).sort((a, b) => Number(b.size_bytes) - Number(a.size_bytes));
+            const totalBytes = roots.reduce((sum, item) => sum + (Number(item.size_bytes) || 0), 0);
+            const largest = leaves[0];
+            summary.innerHTML = `
+                <div class="disk-summary-card"><span>Largest path</span><strong>${largest ? escapeHtml(largest.size) : '—'}</strong><small class="block text-[10px] text-slate-500 mt-1 truncate" title="${largest ? escapeHtml(largest.path || largest.directory) : ''}">${largest ? escapeHtml(largest.path || largest.directory) : 'No data'}</small></div>
+                <div class="disk-summary-card"><span>Scanned footprint</span><strong>${formatStorageBytes(totalBytes)}</strong><small class="block text-[10px] text-slate-500 mt-1">Across ${roots.length} configured roots</small></div>
+                <div class="disk-summary-card"><span>Ranked paths</span><strong>${leaves.length}</strong><small class="block text-[10px] text-slate-500 mt-1">Leaf directories and files</small></div>`;
+            rankedList.querySelectorAll('.storage-rank').forEach(row => row.remove());
+            leaves.slice(0, 12).forEach((item, index) => {
+                const bytes = Number(item.size_bytes) || 0;
+                const share = totalBytes ? (bytes / totalBytes * 100) : 0;
+                const max = Number(leaves[0]?.size_bytes) || 1;
+                const row = document.createElement('div');
+                row.className = 'storage-rank';
+                row.innerHTML = `
+                    <div class="min-w-0">
+                        <div class="storage-rank-path"><span class="text-slate-500 mr-2">${String(index + 1).padStart(2, '0')}</span>${escapeHtml(item.path || item.directory)}</div>
+                        <div class="storage-rank-meta">${share.toFixed(1)}% of scanned footprint · depth ${item.depth}</div>
+                        <div class="storage-rank-bar"><div class="storage-rank-fill" style="width:${Math.max(1, bytes / max * 100)}%"></div></div>
+                    </div>
+                    <div class="storage-rank-size">${escapeHtml(item.size)}</div>`;
+                row.title = `${item.path || item.directory} · ${item.size}`;
+                rankedList.appendChild(row);
+            });
         }
 
-        function renderSquarifiedTreemap(entries) {
-            const container = document.getElementById('storageTreemap');
-            container.querySelectorAll('.treemap-tile').forEach(tile => tile.remove());
-            const roots = (entries || []).filter(entry => Number(entry.size_bytes) > 0);
-            if (!roots.length) return;
-            const colors = ['#0f766e', '#0e7490', '#2563eb', '#7c3aed', '#be185d', '#c2410c', '#4d7c0f'];
-            const renderLevel = (nodes, box, depth) => {
-                const items = nodes.map(node => ({ ...node, value: Number(node.size_bytes) || 0 })).filter(node => node.value > 0);
-                squarify(items).forEach((item, index) => {
-                    const left = box.x + (box.w * item.x / 100);
-                    const top = box.y + (box.h * item.y / 100);
-                    const width = box.w * item.w / 100;
-                    const height = box.h * item.h / 100;
-                    const tile = document.createElement('div');
-                    tile.className = 'treemap-tile';
-                    tile.dataset.depth = String(depth);
-                    tile.style.left = `${left}%`;
-                    tile.style.top = `${top}%`;
-                    tile.style.width = `${width}%`;
-                    tile.style.height = `${height}%`;
-                    tile.style.zIndex = String(depth);
-                    tile.style.background = colors[(index + depth * 2) % colors.length];
-                    tile.title = `${item.path || item.directory} · ${item.size}`;
-                    if (width > 8 && height > 4) {
-                        tile.innerHTML = `<strong>${escapeHtml(item.directory || item.path)}</strong><span>${escapeHtml(item.size)} · full path: ${escapeHtml(item.path || item.directory)}</span>`;
-                    } else {
-                        tile.setAttribute('aria-label', `${item.path || item.directory} · ${item.size}`);
-                    }
-                    container.appendChild(tile);
-                    if (item.children?.length && width > 1 && height > 1) {
-                        const insetX = Math.min(width * 0.012, 0.65);
-                        const insetY = Math.min(height * 0.018, 0.9);
-                        renderLevel(item.children, {
-                            x: left + insetX,
-                            y: top + insetY,
-                            w: Math.max(0, width - insetX * 2),
-                            h: Math.max(0, height - insetY * 2),
-                        }, depth + 1);
-                    }
-                });
-            };
-            renderLevel(roots, { x: 0, y: 0, w: 100, h: 100 }, 0);
+        function formatStorageBytes(bytes) {
+            if (!bytes) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+            return `${(bytes / (1024 ** index)).toFixed(index > 2 ? 1 : 0)} ${units[index]}`;
         }
 
         function switchTab(tabId) {

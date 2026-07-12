@@ -91,7 +91,7 @@ def _scan_tree(path: Path, display_path: str, depth: int) -> dict:
 
 
 def _scan_entry(directory: str, size: int) -> dict:
-    """Return a stable, numeric entry for the client-side squarified treemap."""
+    """Return a stable entry for ranked disk-usage insights."""
     return {
         "directory": directory,
         "path": directory,
